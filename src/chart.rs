@@ -13,12 +13,19 @@ pub const COLORS: [u32; 24] = [
 ];
 
 const CURVE_STEPS: usize = 4;
+const HISTORY_WINDOW_MS: u64 = 62_000;
+const MIN_POLL_MS: u64 = 250;
+const MAX_HISTORY_SAMPLES: usize = (HISTORY_WINDOW_MS / MIN_POLL_MS) as usize + 1;
 
 fn catmull(values: &[f32], segment: usize, t: f32) -> f32 {
     let p0 = values[segment.saturating_sub(1)];
     let p1 = values[segment];
     let p2 = values[segment + 1];
     let p3 = values[(segment + 2).min(values.len() - 1)];
+    catmull_segment(p0, p1, p2, p3, t)
+}
+
+fn catmull_segment(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let t2 = t * t;
     let t3 = t2 * t;
     let value = 0.5
@@ -29,29 +36,94 @@ fn catmull(values: &[f32], segment: usize, t: f32) -> f32 {
     value.clamp(p1.min(p2), p1.max(p2))
 }
 
-fn smooth_stroke(points: &[(f32, f32)], origin: Point<Pixels>, width: f32) -> Option<Path<Pixels>> {
-    let first = *points.first()?;
-    let absolute = |(x, y): (f32, f32)| point(origin.x + px(x), origin.y + px(y));
-    let mut path = PathBuilder::stroke(px(width));
-    path.move_to(absolute(first));
-    for i in 0..points.len() - 1 {
-        let p0 = points[i.saturating_sub(1)];
-        let p1 = points[i];
-        let p2 = points[i + 1];
-        let p3 = points[(i + 2).min(points.len() - 1)];
-        let y_min = p1.1.min(p2.1);
-        let y_max = p1.1.max(p2.1);
-        let control_a = (
-            p1.0 + (p2.0 - p0.0) / 6.,
-            (p1.1 + (p2.1 - p0.1) / 6.).clamp(y_min, y_max),
-        );
-        let control_b = (
-            p2.0 - (p3.0 - p1.0) / 6.,
-            (p2.1 - (p3.1 - p1.1) / 6.).clamp(y_min, y_max),
-        );
-        path.cubic_bezier_to(absolute(p2), absolute(control_a), absolute(control_b));
+fn push_solid_triangle(
+    path: &mut Path<Pixels>,
+    a: Point<Pixels>,
+    b: Point<Pixels>,
+    c: Point<Pixels>,
+) {
+    path.push_triangle((a, b, c), (point(0., 1.), point(0., 1.), point(0., 1.)));
+}
+
+fn push_solid_quad(
+    path: &mut Path<Pixels>,
+    a: Point<Pixels>,
+    b: Point<Pixels>,
+    c: Point<Pixels>,
+    d: Point<Pixels>,
+) {
+    push_solid_triangle(path, a, b, c);
+    push_solid_triangle(path, a, c, d);
+}
+
+fn push_degenerate_triangles(path: &mut Path<Pixels>, at: Point<Pixels>, count: usize) {
+    for _ in 0..count {
+        push_solid_triangle(path, at, at, at);
     }
-    path.build().ok()
+}
+
+fn push_line_segment(
+    path: &mut Path<Pixels>,
+    origin: Point<Pixels>,
+    from: (f32, f32),
+    to: (f32, f32),
+    width: f32,
+) {
+    let dx = to.0 - from.0;
+    let dy = to.1 - from.1;
+    let length = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
+    let ox = -dy / length * width / 2.;
+    let oy = dx / length * width / 2.;
+    let at = |(x, y): (f32, f32)| point(origin.x + px(x), origin.y + px(y));
+    let a = at((from.0 + ox, from.1 + oy));
+    let b = at((to.0 + ox, to.1 + oy));
+    let c = at((to.0 - ox, to.1 - oy));
+    let d = at((from.0 - ox, from.1 - oy));
+    push_solid_quad(path, a, b, c, d);
+}
+
+fn smooth_stroke(
+    points: &[Option<(f32, f32)>],
+    origin: Point<Pixels>,
+    width: f32,
+    max_intervals: usize,
+) -> Option<Path<Pixels>> {
+    if points.len() < 2 {
+        return None;
+    }
+    let mut path = Path::new(origin);
+    let mut has_line = false;
+    for i in 0..points.len() - 1 {
+        let (Some(p1), Some(p2)) = (points[i], points[i + 1]) else {
+            push_degenerate_triangles(&mut path, origin, CURVE_STEPS * 2);
+            continue;
+        };
+        let p0 = points[i.saturating_sub(1)].unwrap_or(p1);
+        let p3 = points[(i + 2).min(points.len() - 1)].unwrap_or(p2);
+        for step in 0..CURVE_STEPS {
+            let t0 = step as f32 / CURVE_STEPS as f32;
+            let t1 = (step + 1) as f32 / CURVE_STEPS as f32;
+            let from = (
+                p1.0 + (p2.0 - p1.0) * t0,
+                catmull_segment(p0.1, p1.1, p2.1, p3.1, t0),
+            );
+            let to = (
+                p1.0 + (p2.0 - p1.0) * t1,
+                catmull_segment(p0.1, p1.1, p2.1, p3.1, t1),
+            );
+            push_line_segment(&mut path, origin, from, to, width);
+        }
+        has_line = true;
+    }
+    if !has_line {
+        return None;
+    }
+    let actual_intervals = points.len() - 1;
+    let padding_triangles = max_intervals
+        .saturating_sub(actual_intervals)
+        .saturating_mul(CURVE_STEPS * 2);
+    push_degenerate_triangles(&mut path, origin, padding_triangles);
+    Some(path)
 }
 pub struct GraphSample {
     pub at: Instant,
@@ -73,7 +145,7 @@ pub struct History {
 impl History {
     pub fn new() -> Self {
         Self {
-            samples: VecDeque::with_capacity(245),
+            samples: VecDeque::with_capacity(MAX_HISTORY_SAMPLES),
         }
     }
     pub fn push(&mut self, s: Arc<Snapshot>, offset: Duration) {
@@ -81,8 +153,13 @@ impl History {
         if self.samples.back().is_some_and(|s| s.at >= at) {
             return;
         }
-        let cutoff = at.checked_sub(Duration::from_secs(62)).unwrap_or(at);
+        let cutoff = at
+            .checked_sub(Duration::from_millis(HISTORY_WINDOW_MS))
+            .unwrap_or(at);
         while self.samples.front().is_some_and(|s| s.at < cutoff) {
+            self.samples.pop_front();
+        }
+        while self.samples.len() >= MAX_HISTORY_SAMPLES {
             self.samples.pop_front();
         }
         self.samples.push_back(Arc::new(GraphSample {
@@ -121,6 +198,7 @@ pub fn graph(
     gpu_uuid: Option<String>,
     network: bool,
     now: Instant,
+    poll_ms: u64,
 ) -> impl IntoElement {
     canvas(
         |_, _, _| (),
@@ -134,6 +212,7 @@ pub fn graph(
                 return;
             }
             let origin = bounds.origin;
+            let max_intervals = (HISTORY_WINDOW_MS / poll_ms.max(MIN_POLL_MS)) as usize;
             let pt = |x: f32, y: f32| point(origin.x + px(x), origin.y + px(y));
             for i in 0..=5 {
                 let y = h * i as f32 / 5.;
@@ -169,6 +248,7 @@ pub fn graph(
             if visible.len() < 2 {
                 return;
             }
+            let max_intervals = max_intervals.max(visible.len() - 1);
             if network {
                 let max = network_scale(&history);
                 for series in 0..2 {
@@ -176,25 +256,19 @@ pub fn graph(
                         .iter()
                         .map(|(x, s)| {
                             let v = if series == 0 { s.rx } else { s.tx };
-                            (*x, h * (1. - v / max))
+                            Some((*x, h * (1. - v / max)))
                         })
                         .collect();
-                    if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                    if let Some(path) = smooth_stroke(&points, origin, 1.8, max_intervals) {
                         window.paint_path(path, rgb(if series == 0 { 0x3584e4 } else { 0xff7800 }));
                     }
                 }
             } else if let Some(uuid) = &gpu_uuid {
                 for series in 0..2 {
-                    let mut points = vec![];
+                    let mut points = Vec::with_capacity(visible.len());
                     for (x, s) in &visible {
                         let Some(g) = s.gpus.iter().find(|g| &g.uuid == uuid) else {
-                            if let Some(path) = smooth_stroke(&points, origin, 1.8) {
-                                window.paint_path(
-                                    path,
-                                    rgb(if series == 0 { 0x2ec27e } else { 0x9141ac }),
-                                );
-                            }
-                            points.clear();
+                            points.push(None);
                             continue;
                         };
                         let v = if series == 0 {
@@ -205,18 +279,12 @@ pub fn graph(
                             None
                         };
                         let Some(v) = v else {
-                            if let Some(path) = smooth_stroke(&points, origin, 1.8) {
-                                window.paint_path(
-                                    path,
-                                    rgb(if series == 0 { 0x2ec27e } else { 0x9141ac }),
-                                );
-                            }
-                            points.clear();
+                            points.push(None);
                             continue;
                         };
-                        points.push((*x, h * (1. - v.clamp(0., 100.) / 100.)));
+                        points.push(Some((*x, h * (1. - v.clamp(0., 100.) / 100.))));
                     }
-                    if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                    if let Some(path) = smooth_stroke(&points, origin, 1.8, max_intervals) {
                         window.paint_path(path, rgb(if series == 0 { 0x2ec27e } else { 0x9141ac }));
                     }
                 }
@@ -226,6 +294,9 @@ pub fn graph(
                     return;
                 }
                 let mut base = vec![0.; visible.len()];
+                let actual_intervals = visible.len() - 1;
+                let triangles_per_layer = actual_intervals * CURVE_STEPS * 2;
+                let mut painted_triangles = 0;
                 for core in 0..n {
                     let top: Vec<_> = visible
                         .iter()
@@ -238,6 +309,8 @@ pub fn graph(
                     // triangles directly. This keeps the chart fluid without per-frame polygon
                     // tessellation or values that overshoot the sampled data.
                     let mut path = Path::new(pt(0., 0.));
+                    let mut min_y = f32::INFINITY;
+                    let mut max_y = f32::NEG_INFINITY;
                     for i in 0..visible.len() - 1 {
                         let x_start = visible[i].0;
                         let x_end = visible[i + 1].0;
@@ -250,14 +323,42 @@ pub fn graph(
                             let top1 = catmull(&top, i, t1).clamp(0., 100.);
                             let base0 = catmull(&base, i, t0).clamp(0., 100.);
                             let base1 = catmull(&base, i, t1).clamp(0., 100.);
-                            path.move_to(pt(x0, h * (1. - top0 / 100.)));
-                            path.line_to(pt(x1, h * (1. - top1 / 100.)));
-                            path.line_to(pt(x1, h * (1. - base1 / 100.)));
-                            path.line_to(pt(x0, h * (1. - base0 / 100.)));
+                            let top_y0 = h * (1. - top0 / 100.);
+                            let top_y1 = h * (1. - top1 / 100.);
+                            let base_y0 = h * (1. - base0 / 100.);
+                            let base_y1 = h * (1. - base1 / 100.);
+                            min_y = min_y.min(top_y0).min(top_y1).min(base_y0).min(base_y1);
+                            max_y = max_y.max(top_y0).max(top_y1).max(base_y0).max(base_y1);
+                            push_solid_quad(
+                                &mut path,
+                                pt(x0, top_y0),
+                                pt(x1, top_y1),
+                                pt(x1, base_y1),
+                                pt(x0, base_y0),
+                            );
                         }
                     }
-                    window.paint_path(path, rgb(COLORS[core % COLORS.len()]));
+                    if max_y - min_y > f32::EPSILON {
+                        window.paint_path(path, rgb(COLORS[core % COLORS.len()]));
+                        painted_triangles += triangles_per_layer;
+                    }
                     base = top;
+                }
+                // Blade's reusable upload belt retains every larger path buffer it sees.
+                // Keep this batch at its final bounded size from the first usable frame,
+                // so later samples reuse one allocation instead of building a staircase.
+                let maximum_triangles = n * max_intervals * CURVE_STEPS * 2;
+                let primer_triangles = maximum_triangles.saturating_sub(painted_triangles);
+                if primer_triangles > 0 {
+                    let mut primer = Path::new(origin);
+                    push_solid_triangle(
+                        &mut primer,
+                        origin,
+                        point(origin.x + px(1.), origin.y),
+                        point(origin.x, origin.y + px(1.)),
+                    );
+                    push_degenerate_triangles(&mut primer, origin, primer_triangles - 1);
+                    window.paint_path(primer, rgba(0x00000000));
                 }
             }
         },
@@ -300,6 +401,7 @@ impl Render for AnimatedChart {
             self.network,
             now.checked_sub(Duration::from_millis(self.poll_ms))
                 .unwrap_or(now),
+            self.poll_ms,
         )
     }
 }
@@ -359,6 +461,23 @@ mod tests {
             );
         }
         assert_eq!(h.samples.len(), 63);
+    }
+
+    #[test]
+    fn history_has_a_hard_sample_bound_at_high_poll_rates() {
+        let mut history = History::new();
+        let start = Instant::now();
+        for millisecond in 0..1000 {
+            history.push(
+                Arc::new(Snapshot {
+                    at: start + Duration::from_millis(millisecond),
+                    ..Default::default()
+                }),
+                Duration::ZERO,
+            );
+        }
+
+        assert_eq!(history.samples.len(), super::MAX_HISTORY_SAMPLES);
     }
 
     #[test]
