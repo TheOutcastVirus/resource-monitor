@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Strata
+GenericName=Resource Monitor
+Comment=CPU, memory, and GPU at a glance
+Exec=strata
+Icon=io.strata.Monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=CPU;GPU;RAM;NVIDIA;Processes;Monitor;
+StartupNotify=true
+StartupWMClass=io.strata.Monitor

@@ -1,0 +1,1430 @@
+use crate::theme::{ACCENT, BG, Icon, LINE, MUTED, PANEL, RAISED, TEXT, icon, icon_button};
+use crate::{
+    chart::{self, COLORS, History},
+    layout::{Layout, Panel, Settings},
+    metrics::{self, Feed, Process, Snapshot},
+};
+use gpui::{prelude::*, *};
+use std::{
+    sync::{Arc, atomic::Ordering},
+    time::{Duration, Instant},
+};
+#[derive(Clone)]
+struct PanelDrag(Panel);
+impl Render for PanelDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .px_4()
+            .py_2()
+            .bg(rgb(LINE))
+            .text_color(rgb(ACCENT))
+            .rounded_md()
+            .child(self.0.title())
+    }
+}
+#[derive(Clone, Copy, PartialEq)]
+enum Entry {
+    None,
+    Search,
+    Preset,
+}
+#[derive(Clone, Copy)]
+enum Resize {
+    Height(Panel, f32, f32),
+}
+pub struct Monitor {
+    feed: Feed,
+    sample: Arc<Snapshot>,
+    history: History,
+    cpu_chart: Entity<chart::AnimatedChart>,
+    gpu_chart: Entity<chart::AnimatedChart>,
+    network_chart: Entity<chart::AnimatedChart>,
+    process_table: Entity<crate::table::ProcessTable>,
+    gpu_table: Entity<crate::table::ProcessTable>,
+    effective_columns: usize,
+    settings: Settings,
+    focus: FocusHandle,
+    menu: bool,
+    paused: bool,
+    pause_at: Instant,
+    paused_duration: Duration,
+    entry: Entry,
+    query: String,
+    preset_name: String,
+    notice: String,
+    selected: Option<Process>,
+    rows: Vec<usize>,
+    gpu_rows: Vec<usize>,
+    gpu_index: usize,
+    resize: Option<Resize>,
+    fitted: Vec<(Panel, f32)>,
+    _timer: Task<()>,
+}
+fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
+    div()
+        .id(id)
+        .px_2()
+        .py_1()
+        .rounded(px(4.))
+        .cursor_pointer()
+        .text_color(rgb(MUTED))
+        .hover(|s| s.bg(rgb(LINE)).text_color(rgb(TEXT)))
+        .child(label.into())
+}
+fn muted(label: impl Into<SharedString>) -> Div {
+    div().text_color(rgb(MUTED)).child(label.into())
+}
+fn stat(label: &str, value: String, color: u32) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .min_w(px(95.))
+        .flex_1()
+        .child(muted(SharedString::from(label.to_owned())).text_size(px(10.)))
+        .child(div().text_color(rgb(color)).text_size(px(13.)).child(value))
+}
+fn opt(v: Option<u32>, unit: &str) -> String {
+    v.map(|v| format!("{v}{unit}")).unwrap_or("—".into())
+}
+impl Monitor {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let (settings, error) = Settings::load();
+        let focus = cx.focus_handle();
+        window.focus(&focus);
+        let cpu_chart = cx.new(|cx| chart::AnimatedChart::new(window, cx));
+        let gpu_chart = cx.new(|cx| chart::AnimatedChart::new(window, cx));
+        let network_chart = cx.new(|cx| chart::AnimatedChart::new(window, cx));
+        let process_table = cx.new(|_| crate::table::ProcessTable::new(false));
+        let gpu_table = cx.new(|_| crate::table::ProcessTable::new(true));
+        for table in [&process_table, &gpu_table] {
+            cx.subscribe(table, |this, _, event, cx| {
+                match event {
+                    crate::table::TableEvent::Selected(p) => this.selected = Some(p.clone()),
+                    crate::table::TableEvent::Copied(pid) => {
+                        this.notice = format!("Copied PID {pid}")
+                    }
+                };
+                cx.notify();
+            })
+            .detach();
+        }
+        let timer = cx.spawn_in(window, async move |weak, cx| {
+            loop {
+                let delay = weak.update_in(cx, |this, window, cx| {
+                    let next = this.feed.latest.lock().ok().and_then(|mut s| s.take());
+                    if !this.paused
+                        && let Some(s) = next
+                    {
+                        this.history.push(s.clone(), this.paused_duration);
+                        this.sample = s;
+                        this.reindex();
+                        cx.notify();
+                    }
+                    if !this.paused {
+                        for chart in [&this.cpu_chart, &this.gpu_chart, &this.network_chart] {
+                            chart.update(cx, |chart, cx| {
+                                if chart.enabled {
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    }
+                    if this.paused || !window.is_window_active() {
+                        250
+                    } else {
+                        1000 / this.settings.layout.fps
+                    }
+                });
+                let Ok(ms) = delay else {
+                    break;
+                };
+                cx.background_executor()
+                    .timer(Duration::from_millis(ms))
+                    .await;
+            }
+        });
+        Self {
+            feed: Feed::start(settings.layout.poll_ms),
+            sample: Arc::new(Snapshot::default()),
+            history: History::new(),
+            cpu_chart,
+            gpu_chart,
+            network_chart,
+            process_table,
+            gpu_table,
+            effective_columns: 1,
+            settings,
+            focus,
+            menu: false,
+            paused: false,
+            pause_at: Instant::now(),
+            paused_duration: Duration::ZERO,
+            entry: Entry::None,
+            query: String::new(),
+            preset_name: String::new(),
+            notice: error.unwrap_or_default(),
+            selected: None,
+            rows: vec![],
+            gpu_rows: vec![],
+            gpu_index: 0,
+            resize: None,
+            fitted: vec![],
+            _timer: timer,
+        }
+    }
+    fn save(&mut self) {
+        self.feed
+            .interval
+            .store(self.settings.layout.poll_ms, Ordering::Relaxed);
+        if let Err(e) = self.settings.save() {
+            self.notice = format!("Save failed: {e}");
+        }
+    }
+    fn reindex(&mut self) {
+        let query = self.query.to_lowercase();
+        let matches = |p: &Process| {
+            query.is_empty()
+                || p.name.to_lowercase().contains(&query)
+                || p.command.to_lowercase().contains(&query)
+                || p.user.to_lowercase().contains(&query)
+                || p.pid.to_string().contains(&query)
+        };
+        self.rows = self
+            .sample
+            .processes
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| matches(p))
+            .map(|(i, _)| i)
+            .collect();
+        self.gpu_index = self.gpu_index.min(self.sample.gpus.len().saturating_sub(1));
+        if let Some(g) = self.sample.gpus.get(self.gpu_index) {
+            self.gpu_rows = g
+                .processes
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| matches(p))
+                .map(|(i, _)| i)
+                .collect();
+        } else {
+            self.gpu_rows.clear();
+        }
+        if let Some(p) = &mut self.selected {
+            let next = if p.kind.is_empty() {
+                self.sample.processes.iter().find(|r| r.pid == p.pid)
+            } else {
+                self.sample
+                    .gpus
+                    .get(self.gpu_index)
+                    .and_then(|g| g.processes.iter().find(|r| r.pid == p.pid))
+            };
+            if let Some(next) = next {
+                *p = next.clone();
+            }
+        }
+    }
+    fn key(&mut self, e: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let key = e.keystroke.key.as_str();
+        if key == "escape" {
+            self.entry = Entry::None;
+            self.selected = None;
+            self.menu = false;
+            self.query.clear();
+            self.reindex();
+            cx.notify();
+            return;
+        }
+        if self.entry != Entry::None {
+            if key == "enter" {
+                if self.entry == Entry::Preset {
+                    let name = self.preset_name.trim().to_string();
+                    if !name.is_empty() {
+                        self.settings
+                            .presets
+                            .insert(name.clone(), self.settings.layout.clone());
+                        self.save();
+                        self.notice = format!("Saved preset · {name}");
+                    }
+                }
+                self.entry = Entry::None;
+            } else {
+                let value = if self.entry == Entry::Search {
+                    &mut self.query
+                } else {
+                    &mut self.preset_name
+                };
+                if key == "backspace" {
+                    value.pop();
+                } else if !e.keystroke.modifiers.control
+                    && !e.keystroke.modifiers.alt
+                    && !e.keystroke.modifiers.platform
+                    && let Some(s) = &e.keystroke.key_char
+                    && value.len() < 128
+                {
+                    value.push_str(s);
+                }
+                self.reindex();
+            }
+        } else if key == "/" {
+            self.entry = Entry::Search;
+        } else if key == "space" {
+            self.toggle_pause();
+        }
+        cx.notify();
+    }
+    fn toggle_pause(&mut self) {
+        self.paused = !self.paused;
+        if self.paused {
+            self.pause_at = Instant::now();
+        } else {
+            self.paused_duration += self.pause_at.elapsed();
+        }
+    }
+    fn layout_menu(&self, cx: &mut Context<Self>) -> Div {
+        div()
+            .p_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .bg(rgb(RAISED))
+            .border_b_1()
+            .border_color(rgb(LINE))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .items_center()
+                    .child(muted("Presets").w(px(64.)))
+                    .child(button("portrait", "Portrait").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.settings.layout = Layout::portrait();
+                            this.save();
+                            cx.notify();
+                        },
+                    )))
+                    .child(button("landscape", "Landscape").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.settings.layout = Layout::landscape();
+                            this.save();
+                            cx.notify();
+                        },
+                    )))
+                    .child(button("new-preset", "Save preset…").on_click(cx.listener(
+                        |this, _, window, cx| {
+                            this.entry = Entry::Preset;
+                            this.preset_name.clear();
+                            window.focus(&this.focus);
+                            cx.notify();
+                        },
+                    )))
+                    .children(self.settings.presets.keys().map(|name| {
+                        let load = name.clone();
+                        let delete = name.clone();
+                        div()
+                            .flex()
+                            .items_center()
+                            .rounded(px(4.))
+                            .bg(rgb(BG))
+                            .child(
+                                button(
+                                    SharedString::from(format!("load-{name}")),
+                                    SharedString::from(name.clone()),
+                                )
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        if let Some(l) = this.settings.presets.get(&load) {
+                                            this.settings.layout = l.clone();
+                                            this.save();
+                                            this.notice = format!("Loaded preset · {load}");
+                                        }
+                                        cx.notify();
+                                    },
+                                )),
+                            )
+                            .child(
+                                icon_button(
+                                    SharedString::from(format!("delete-{name}")),
+                                    Icon::Close,
+                                )
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.settings.presets.remove(&delete);
+                                        this.save();
+                                        cx.notify();
+                                    },
+                                )),
+                            )
+                    })),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(muted("Columns").w(px(64.)))
+                    .children((1..=3).map(|n| {
+                        button(("columns", n), SharedString::from(n.to_string()))
+                            .when(self.settings.layout.columns == n, |d| {
+                                d.text_color(rgb(ACCENT))
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.settings.layout.columns = n;
+                                this.save();
+                                cx.notify();
+                            }))
+                    })),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(muted("Panels").w(px(64.)))
+                    .children(Panel::ALL.into_iter().map(|p| {
+                        let visible = self
+                            .settings
+                            .layout
+                            .tiles
+                            .iter()
+                            .any(|t| t.panel == p && t.visible);
+                        button(
+                            SharedString::from(format!("show-{p:?}")),
+                            SharedString::from(p.title()),
+                        )
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(icon(if visible { Icon::Check } else { Icon::Plus }))
+                        .when(visible, |s| s.text_color(rgb(ACCENT)))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(t) =
+                                this.settings.layout.tiles.iter_mut().find(|t| t.panel == p)
+                            {
+                                t.visible = !t.visible;
+                            }
+                            this.save();
+                            cx.notify();
+                        }))
+                    })),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(muted("Polling").w(px(64.)))
+                    .children([500, 1000, 2000].into_iter().map(|ms| {
+                        button(
+                            ("poll", ms as usize),
+                            SharedString::from(format!("{}s", ms as f32 / 1000.)),
+                        )
+                        .when(self.settings.layout.poll_ms == ms, |s| {
+                            s.text_color(rgb(ACCENT))
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.settings.layout.poll_ms = ms;
+                            this.save();
+                            cx.notify();
+                        }))
+                    }))
+                    .child(muted("Charts").ml_3())
+                    .children([15, 30, 60].into_iter().map(|fps| {
+                        button(
+                            ("fps", fps as usize),
+                            SharedString::from(format!("{fps} fps")),
+                        )
+                        .when(self.settings.layout.fps == fps, |s| {
+                            s.text_color(rgb(ACCENT))
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.settings.layout.fps = fps;
+                            this.save();
+                            cx.notify();
+                        }))
+                    }))
+                    .child(
+                        button("smaller", "A−").on_click(cx.listener(|this, _, _, cx| {
+                            this.settings.layout.font_size =
+                                (this.settings.layout.font_size - 1.).max(10.);
+                            this.save();
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        button("larger", "A+").on_click(cx.listener(|this, _, _, cx| {
+                            this.settings.layout.font_size =
+                                (this.settings.layout.font_size + 1.).min(16.);
+                            this.save();
+                            cx.notify();
+                        })),
+                    ),
+            )
+    }
+    fn cpu(&self) -> Div {
+        let s = &self.sample;
+        div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .px_3()
+            .pb_2()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(div().flex_1().overflow_hidden().text_ellipsis().child(
+                        if s.cpu_name.is_empty() {
+                            "Reading CPU…".into()
+                        } else {
+                            s.cpu_name.clone()
+                        },
+                    ))
+                    .child(
+                        div()
+                            .text_color(rgb(ACCENT))
+                            .child(format!("{:.1}%", s.cpu)),
+                    )
+                    .child(muted(
+                        s.temperature
+                            .map(|t| format!("{t:.0} °C"))
+                            .unwrap_or("— °C".into()),
+                    )),
+            )
+            .child(self.chart(None))
+            .child(div().flex().flex_wrap().gap_x_3().gap_y_1().children(
+                s.cores.iter().enumerate().map(|(i, v)| {
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .w(px(82.))
+                        .text_size(px(10.))
+                        .child(
+                            div()
+                                .size(px(4.))
+                                .rounded_full()
+                                .bg(rgb(COLORS[i % COLORS.len()])),
+                        )
+                        .child(muted(format!("{:02}", i)))
+                        .child(div().flex_1().text_right().child(format!("{v:4.1}%")))
+                }),
+            ))
+    }
+    fn chart(&self, gpu: Option<String>) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h(px(35.))
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h_0()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .h_full()
+                            .overflow_hidden()
+                            .child(if gpu.is_some() {
+                                self.gpu_chart.clone()
+                            } else {
+                                self.cpu_chart.clone()
+                            }),
+                    )
+                    .child(
+                        div()
+                            .w(px(26.))
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .justify_between()
+                            .text_size(px(9.))
+                            .text_color(rgb(MUTED))
+                            .child("100%")
+                            .child("50%")
+                            .child("0%"),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .pr(px(34.))
+                    .text_size(px(9.))
+                    .text_color(rgb(MUTED))
+                    .child("60s")
+                    .child("30s")
+                    .child("now"),
+            )
+    }
+    fn memory(&self) -> Div {
+        let s = &self.sample;
+        let total = s.memory_total;
+        let ratio = |v: u64| {
+            if total > 0 {
+                v as f32 / total as f32
+            } else {
+                0.
+            }
+        };
+        let segments = [
+            ("Used", s.memory_active, 0x79c7ad),
+            ("Cache", s.memory_cached, 0xe8bc70),
+            ("Buffers", s.memory_buffers, 0x8b9ef0),
+            ("Free", s.memory_free, 0x414e5b),
+        ];
+        let swap = if s.swap_total > 0 {
+            s.swap_used as f32 / s.swap_total as f32
+        } else {
+            0.
+        };
+        div()
+            .px_3()
+            .pb_2()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .pt_2()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(muted("RAM").w(px(36.)))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
+                            .h(px(9.))
+                            .rounded(px(2.))
+                            .overflow_hidden()
+                            .bg(rgb(LINE))
+                            .children(segments.iter().map(|(_, v, c)| {
+                                div().h_full().w(relative(ratio(*v))).bg(rgb(*c))
+                            })),
+                    )
+                    .child(div().text_size(px(10.)).child(format!(
+                        "{} / {}",
+                        metrics::bytes(s.memory_active),
+                        metrics::bytes(total)
+                    ))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_x_3()
+                    .gap_y_1()
+                    .text_size(px(9.))
+                    .children(segments.into_iter().map(|(label, v, c)| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(div().size(px(5.)).bg(rgb(c)).rounded(px(1.)))
+                            .child(muted(format!("{label} {}", metrics::bytes(v))))
+                    })),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_3()
+                    .child(muted("SWAP").w(px(36.)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .h(px(7.))
+                            .rounded(px(2.))
+                            .bg(rgb(LINE))
+                            .overflow_hidden()
+                            .child(
+                                div()
+                                    .h_full()
+                                    .w(relative(swap.clamp(0., 1.)))
+                                    .bg(rgb(0xa291c5)),
+                            ),
+                    )
+                    .child(div().text_size(px(10.)).child(if s.swap_total == 0 {
+                        "Not configured".into()
+                    } else {
+                        format!(
+                            "{} / {}",
+                            metrics::bytes(s.swap_used),
+                            metrics::bytes(s.swap_total)
+                        )
+                    })),
+            )
+    }
+    fn gpu(&self, cx: &mut Context<Self>) -> Div {
+        let Some(g) = self.sample.gpus.get(self.gpu_index) else {
+            return self.no_gpu();
+        };
+        div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .px_3()
+            .pb_2()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap_2()
+                    .child(div().flex_1().child(g.name.clone()))
+                    .when(self.sample.gpus.len() > 1, |s| {
+                        s.child(
+                            button(
+                                "next-gpu",
+                                SharedString::from(format!("GPU {} ▸", self.gpu_index)),
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.gpu_index = (this.gpu_index + 1) % this.sample.gpus.len();
+                                this.reindex();
+                                cx.notify();
+                            })),
+                        )
+                    }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_4()
+                    .text_size(px(11.))
+                    .child(
+                        div()
+                            .text_color(rgb(ACCENT))
+                            .child(format!("GPU  {}", opt(g.utilization, "%"))),
+                    )
+                    .child(div().text_color(rgb(0xc4a478)).child(format!(
+                        "VRAM  {} / {}",
+                        metrics::bytes(g.memory_used),
+                        metrics::bytes(g.memory_total)
+                    ))),
+            )
+            .child(self.chart(Some(g.uuid.clone())))
+    }
+    fn no_gpu(&self) -> Div {
+        div().p_3().text_color(rgb(MUTED)).child(
+            self.sample
+                .gpu_error
+                .clone()
+                .unwrap_or("Waiting for a supported NVIDIA GPU…".into()),
+        )
+    }
+    fn gpu_details(&self) -> Div {
+        let Some(g) = self.sample.gpus.get(self.gpu_index) else {
+            return self.no_gpu();
+        };
+        div()
+            .px_3()
+            .pb_3()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .justify_center()
+            .gap_3()
+            .child(
+                div().flex().gap_2().children(
+                    [
+                        ("GPU clock · MHz", opt(g.clock, "")),
+                        ("Memory · MHz", opt(g.memory_clock, "")),
+                        ("Temperature", opt(g.temperature, " °C")),
+                        ("Fan", opt(g.fan, "%")),
+                    ]
+                    .into_iter()
+                    .map(|(l, v)| {
+                        stat(
+                            l,
+                            v,
+                            if l == "Temperature" && g.temperature.unwrap_or(0) > 85 {
+                                0xdf947d
+                            } else {
+                                TEXT
+                            },
+                        )
+                    }),
+                ),
+            )
+            .child(
+                div().flex().gap_2().children(
+                    [
+                        (
+                            "Power",
+                            format!(
+                                "{} / {} W",
+                                g.power
+                                    .map(|p| (p / 1000).to_string())
+                                    .unwrap_or("—".into()),
+                                g.power_limit
+                                    .map(|p| (p / 1000).to_string())
+                                    .unwrap_or("—".into())
+                            ),
+                        ),
+                        (
+                            "PCIe",
+                            format!("Gen {} ×{}", opt(g.generation, ""), opt(g.width, "")),
+                        ),
+                        (
+                            "RX / TX · MiB/s",
+                            format!(
+                                "{} / {}",
+                                g.rx.map(|v| format!("{:.1}", v as f32 / 1024.))
+                                    .unwrap_or("—".into()),
+                                g.tx.map(|v| format!("{:.1}", v as f32 / 1024.))
+                                    .unwrap_or("—".into())
+                            ),
+                        ),
+                        (
+                            "Encoder / decoder",
+                            format!("{} / {}", opt(g.encoder, "%"), opt(g.decoder, "%")),
+                        ),
+                    ]
+                    .into_iter()
+                    .map(|(l, v)| stat(l, v, TEXT)),
+                ),
+            )
+    }
+    fn processes(&self, gpu: bool, _: &mut Context<Self>) -> Div {
+        let table = if gpu {
+            self.gpu_table.clone()
+        } else {
+            self.process_table.clone()
+        };
+        let style = StyleRefinement::default().size_full();
+        div()
+            .flex_1()
+            .min_h_0()
+            .child(AnyView::from(table).cached(style))
+    }
+    fn network(&self) -> Div {
+        let n = &self.sample.network;
+        div()
+            .px_3()
+            .pb_2()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .flex_1()
+            .min_h_0()
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_4()
+                    .text_size(px(11.))
+                    .child(
+                        div()
+                            .text_color(rgb(0x7da5ff))
+                            .child(format!("↓ {}", crate::network::rate(n.rx_rate))),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(0xe8bc70))
+                            .child(format!("↑ {}", crate::network::rate(n.tx_rate))),
+                    )
+                    .child(muted(format!(
+                        "Total ↓ {}  ↑ {}",
+                        metrics::bytes(n.rx),
+                        metrics::bytes(n.tx)
+                    ))),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_h(px(40.))
+                    .overflow_hidden()
+                    .child(self.network_chart.clone()),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_between()
+                    .text_size(px(10.))
+                    .text_color(rgb(MUTED))
+                    .child("60s · auto scale")
+                    .child("now"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_3()
+                    .text_size(px(10.))
+                    .children(n.interfaces.iter().map(|i| {
+                        muted(format!(
+                            "{} ↓ {} ↑ {} · {} / {} total",
+                            i.name,
+                            crate::network::rate(i.rx_rate),
+                            crate::network::rate(i.tx_rate),
+                            metrics::bytes(i.rx),
+                            metrics::bytes(i.tx)
+                        ))
+                    })),
+            )
+    }
+    fn panel(&self, p: Panel, height: f32, cx: &mut Context<Self>) -> Stateful<Div> {
+        let summary = match p {
+            Panel::Cpu => {
+                if self.sample.cores.is_empty() {
+                    String::new()
+                } else {
+                    format!("{} logical cores", self.sample.cores.len())
+                }
+            }
+            Panel::Processes => format!("{}", self.rows.len()),
+            Panel::GpuProcesses => format!("{}", self.gpu_rows.len()),
+            Panel::Memory => String::new(),
+            Panel::Network => String::new(),
+            Panel::Gpu => String::new(),
+            Panel::GpuDetails => String::new(),
+        };
+        let body = match p {
+            Panel::Cpu => self.cpu(),
+            Panel::Memory => self.memory(),
+            Panel::Network => self.network(),
+            Panel::Processes => self.processes(false, cx),
+            Panel::Gpu => self.gpu(cx),
+            Panel::GpuDetails => self.gpu_details(),
+            Panel::GpuProcesses => self.processes(true, cx),
+        };
+        div()
+            .id(SharedString::from(format!("panel-{p:?}")))
+            .flex()
+            .flex_col()
+            .h(px(height))
+            .flex_shrink_0()
+            .w_full()
+            .min_w_0()
+            .rounded(px(4.))
+            .bg(rgb(PANEL))
+            .border_1()
+            .border_color(rgb(LINE))
+            .overflow_hidden()
+            .on_drop(cx.listener(move |this, drag: &PanelDrag, _, cx| {
+                this.settings.layout.move_before(drag.0, p);
+                this.save();
+                cx.notify();
+            }))
+            .drag_over::<PanelDrag>(|s, _, _, _| s.border_color(rgb(ACCENT)))
+            .child(
+                div()
+                    .id(SharedString::from(format!("header-{p:?}")))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .h(px(32.))
+                    .flex_shrink_0()
+                    .px_3()
+                    .when(true, |d| {
+                        d.cursor_move()
+                            .on_drag(PanelDrag(p), |drag, _, _, cx| cx.new(|_| drag.clone()))
+                            .child(icon(Icon::Grip))
+                    })
+                    .child(div().font_weight(FontWeight::SEMIBOLD).child(p.title()))
+                    .child(muted(summary).text_size(px(10.)).ml_1())
+                    .child(div().flex_1())
+                    .when(self.settings.layout.columns > 1, |d| {
+                        d.child(
+                            button(
+                                SharedString::from(format!("span-{p:?}")),
+                                SharedString::from({
+                                    let span = self
+                                        .settings
+                                        .layout
+                                        .tiles
+                                        .iter()
+                                        .find(|t| t.panel == p)
+                                        .map(|t| t.span.min(self.settings.layout.columns))
+                                        .unwrap_or(1);
+                                    if span == self.settings.layout.columns {
+                                        "Full width".into()
+                                    } else {
+                                        format!("{span} col{}", if span > 1 { "s" } else { "" })
+                                    }
+                                }),
+                            )
+                            .text_size(px(10.))
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    if let Some(t) =
+                                        this.settings.layout.tiles.iter_mut().find(|t| t.panel == p)
+                                    {
+                                        t.span = t.span % this.settings.layout.columns + 1;
+                                    }
+                                    this.save();
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                    })
+                    .when(true, |d| {
+                        d.child(
+                            icon_button(SharedString::from(format!("hide-{p:?}")), Icon::Close)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(t) =
+                                        this.settings.layout.tiles.iter_mut().find(|t| t.panel == p)
+                                    {
+                                        t.visible = false;
+                                    }
+                                    this.save();
+                                    cx.notify();
+                                })),
+                        )
+                    }),
+            )
+            .child(body)
+            .when(true, |d| {
+                d.child(
+                    div()
+                        .id(SharedString::from(format!("resize-{p:?}")))
+                        .h(px(9.))
+                        .flex_shrink_0()
+                        .w_full()
+                        .cursor_row_resize()
+                        .hover(|s| s.bg(rgb(LINE)))
+                        .flex()
+                        .justify_center()
+                        .items_center()
+                        .child(div().w(px(22.)).h(px(1.)).bg(rgb(LINE)))
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                                for (panel, h) in &this.fitted {
+                                    if let Some(t) = this
+                                        .settings
+                                        .layout
+                                        .tiles
+                                        .iter_mut()
+                                        .find(|t| t.panel == *panel)
+                                    {
+                                        t.height = *h;
+                                    }
+                                }
+                                let _ = window;
+                                this.resize =
+                                    Some(Resize::Height(p, f32::from(e.position.y), height));
+                                cx.stop_propagation();
+                            }),
+                        ),
+                )
+            })
+    }
+    fn workspace(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let columns = self.effective_columns;
+        div()
+            .id("workspace")
+            .flex()
+            .flex_col()
+            .gap_3()
+            .size_full()
+            .min_h_0()
+            .overflow_y_scroll()
+            .children(
+                self.settings
+                    .layout
+                    .rows(columns)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, row)| {
+                        let empty =
+                            columns - row.iter().map(|t| t.span.min(columns)).sum::<usize>();
+                        let height = self
+                            .fitted
+                            .iter()
+                            .find(|(p, _)| *p == row[0].panel)
+                            .map(|(_, h)| *h)
+                            .unwrap_or(200.);
+                        div()
+                            .id(("grid-row", i))
+                            .flex()
+                            .gap_3()
+                            .h(px(height))
+                            .flex_shrink_0()
+                            .w_full()
+                            .children(row.into_iter().map(|tile| {
+                                let weight = tile.span.min(columns) as f32;
+                                div()
+                                    .flex_basis(px(12. * (weight - 1.)))
+                                    .flex_grow()
+                                    .min_w_0()
+                                    .h_full()
+                                    .map(|mut d| {
+                                        d.style().flex_grow = Some(weight);
+                                        d
+                                    })
+                                    .child(self.panel(tile.panel, height, cx))
+                            }))
+                            .when(empty > 0, |d| {
+                                d.child(div().flex_basis(px(12. * (empty as f32 - 1.))).map(
+                                    |mut d| {
+                                        d.style().flex_grow = Some(empty as f32);
+                                        d
+                                    },
+                                ))
+                            })
+                    }),
+            )
+            .when(cx.has_active_drag(), |d| {
+                d.child(
+                    div()
+                        .id("drop-end")
+                        .h(px(40.))
+                        .flex_shrink_0()
+                        .border_1()
+                        .border_dashed()
+                        .border_color(rgb(LINE))
+                        .text_color(rgb(MUTED))
+                        .child("Drop panel here")
+                        .on_drop(cx.listener(|this, drag: &PanelDrag, _, cx| {
+                            if let Some(i) = this
+                                .settings
+                                .layout
+                                .tiles
+                                .iter()
+                                .position(|t| t.panel == drag.0)
+                            {
+                                let tile = this.settings.layout.tiles.remove(i);
+                                this.settings.layout.tiles.push(tile);
+                                this.save();
+                                cx.notify();
+                            }
+                        })),
+                )
+            })
+    }
+}
+impl Render for Monitor {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.effective_columns = self.settings.layout.columns.min(
+            ((f32::from(window.viewport_size().width) - 24.) / 480.)
+                .floor()
+                .max(1.) as usize,
+        );
+        let available = f32::from(window.viewport_size().height)
+            - 80.
+            - if self.menu { 190. } else { 0. }
+            - if self.selected.is_some() { 140. } else { 0. }
+            - if self.entry == Entry::Preset { 36. } else { 0. };
+        self.fitted = self
+            .settings
+            .layout
+            .fitted_heights(self.effective_columns, available);
+        for table in [&self.process_table, &self.gpu_table] {
+            table.update(cx, |table, cx| {
+                table.set(
+                    self.sample.clone(),
+                    self.gpu_index,
+                    self.query.clone(),
+                    self.settings.layout.font_size,
+                    cx,
+                )
+            });
+        }
+        for (entity, panel) in [
+            (&self.cpu_chart, Panel::Cpu),
+            (&self.gpu_chart, Panel::Gpu),
+            (&self.network_chart, Panel::Network),
+        ] {
+            entity.update(cx, |chart, _| {
+                chart.history = self.history.clone();
+                chart.network = panel == Panel::Network;
+                chart.fps = self.settings.layout.fps;
+                chart.poll_ms = self.settings.layout.poll_ms;
+                chart.clock_offset = self.paused_duration;
+                chart.frozen = if self.paused {
+                    Some(self.pause_at)
+                } else {
+                    None
+                };
+                chart.enabled = self
+                    .settings
+                    .layout
+                    .tiles
+                    .iter()
+                    .any(|t| t.panel == panel && t.visible);
+                chart.gpu = if panel == Panel::Gpu {
+                    self.sample.gpus.get(self.gpu_index).map(|g| g.uuid.clone())
+                } else {
+                    None
+                };
+            });
+        }
+        div()
+            .id("monitor")
+            .track_focus(&self.focus)
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(rgba(0x191b1fe0))
+            .text_color(rgb(TEXT))
+            .font_family("JetBrains Mono")
+            .text_size(px(self.settings.layout.font_size))
+            .on_key_down(cx.listener(Self::key))
+            .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _window, cx| {
+                if let Some(resize) = this.resize {
+                    if e.pressed_button != Some(MouseButton::Left) {
+                        this.resize = None;
+                        this.save();
+                        return;
+                    }
+                    match resize {
+                        Resize::Height(p, y, h) => {
+                            let panels: Vec<_> = this
+                                .settings
+                                .layout
+                                .rows(this.effective_columns)
+                                .into_iter()
+                                .find(|r| r.iter().any(|t| t.panel == p))
+                                .map(|r| r.into_iter().map(|t| t.panel).collect())
+                                .unwrap_or_default();
+                            for panel in panels {
+                                if let Some(t) = this
+                                    .settings
+                                    .layout
+                                    .tiles
+                                    .iter_mut()
+                                    .find(|t| t.panel == panel)
+                                {
+                                    t.height = (h + f32::from(e.position.y) - y)
+                                        .clamp(panel.min_height(), 4000.);
+                                }
+                            }
+                        }
+                    }
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.resize.take().is_some() {
+                        this.save();
+                        cx.notify();
+                    }
+                }),
+            )
+            .on_mouse_up_out(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    if this.resize.take().is_some() {
+                        this.save();
+                        cx.notify();
+                    }
+                }),
+            )
+            .child(
+                div()
+                    .h(px(24.))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .px_2()
+                    .text_size(px(11.))
+                    .child(
+                        div()
+                            .id("top-drag")
+                            .flex_1()
+                            .h_full()
+                            .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                window.start_window_move()
+                            }),
+                    )
+                    .child(
+                        icon_button("minimize", Icon::Minimize)
+                            .on_click(|_, window, _| window.minimize_window()),
+                    )
+                    .child(
+                        icon_button("maximize", Icon::Maximize)
+                            .on_click(|_, window, _| window.zoom_window()),
+                    )
+                    .child(
+                        icon_button("close", Icon::Close)
+                            .on_click(|_, window, _| window.remove_window()),
+                    ),
+            )
+            .child(div().flex_1().min_h_0().p_3().child(self.workspace(cx)))
+            .when_some(self.selected.clone(), |d, p| {
+                d.child(
+                    div()
+                        .px_4()
+                        .py_2()
+                        .bg(rgb(RAISED))
+                        .border_t_1()
+                        .border_color(rgb(LINE))
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .child(div().flex_1().text_color(rgb(ACCENT)).child(format!(
+                                    "{} · PID {} · {} · state {} · {} threads",
+                                    p.name, p.pid, p.user, p.state, p.threads
+                                )))
+                                .child(
+                                    button("copy-command", "Copy command")
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(icon(Icon::Copy))
+                                        .on_click({
+                                            let command = p.command.clone();
+                                            move |_, _, cx| {
+                                                cx.write_to_clipboard(ClipboardItem::new_string(
+                                                    command.clone(),
+                                                ))
+                                            }
+                                        }),
+                                )
+                                .child(icon_button("close-detail", Icon::Close).on_click(
+                                    cx.listener(|this, _, _, cx| {
+                                        this.selected = None;
+                                        cx.notify();
+                                    }),
+                                )),
+                        )
+                        .child(
+                            div()
+                                .id("command-detail")
+                                .max_h(px(115.))
+                                .overflow_y_scroll()
+                                .text_size(px(11.))
+                                .child(format!(
+                                    "{}CPU {:.1}%  ·  RAM {}{}\n{}",
+                                    if p.kind.is_empty() {
+                                        String::new()
+                                    } else {
+                                        format!("{} · ", p.kind)
+                                    },
+                                    p.cpu,
+                                    metrics::bytes(p.memory),
+                                    p.gpu_memory
+                                        .map(|v| format!("  ·  VRAM {}", metrics::bytes(v)))
+                                        .unwrap_or_default(),
+                                    p.command
+                                )),
+                        ),
+                )
+            })
+            .when(self.menu, |d| d.child(self.layout_menu(cx)))
+            .when(self.entry == Entry::Preset, |d| {
+                d.child(div().px_4().py_2().bg(rgb(LINE)).child(format!(
+                    "Preset name: {}▏   Enter to save · Esc to cancel",
+                    self.preset_name
+                )))
+            })
+            .when(!self.notice.is_empty(), |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .px_3()
+                        .text_size(px(10.))
+                        .text_color(rgb(MUTED))
+                        .child(self.notice.clone())
+                        .child(icon_button("dismiss", Icon::Close).on_click(cx.listener(
+                            |this, _, _, cx| {
+                                this.notice.clear();
+                                cx.notify();
+                            },
+                        ))),
+                )
+            })
+            .child(
+                div()
+                    .px_3()
+                    .h(px(32.))
+                    .flex_shrink_0()
+                    .border_t_1()
+                    .border_color(rgb(LINE))
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .text_size(px(10.))
+                    .text_color(rgb(MUTED))
+                    .child(
+                        button("pause", if self.paused { "Resume" } else { "Pause" })
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(icon(if self.paused { Icon::Play } else { Icon::Pause }))
+                            .when(self.paused, |d| d.text_color(rgb(0xe8bc70)))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.toggle_pause();
+                                cx.notify();
+                            })),
+                    )
+                    .child(muted(format!(
+                        "{:.1}s",
+                        self.settings.layout.poll_ms as f32 / 1000.
+                    )))
+                    .child(
+                        div()
+                            .flex_1()
+                            .h_full()
+                            .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                window.start_window_move()
+                            }),
+                    )
+                    .child(
+                        button(
+                            "search",
+                            SharedString::from(if self.entry == Entry::Search {
+                                format!("Filter: {}▏", self.query)
+                            } else if self.query.is_empty() {
+                                "Filter processes".into()
+                            } else {
+                                format!("Filter: {}", self.query)
+                            }),
+                        )
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(icon(Icon::Search))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.entry = Entry::Search;
+                            window.focus(&this.focus);
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        button("layouts", "Layout")
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(icon(Icon::Columns))
+                            .when(self.menu, |s| s.text_color(rgb(ACCENT)))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.menu = !this.menu;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("window-resize")
+                            .w(px(14.))
+                            .h_full()
+                            .cursor_nwse_resize()
+                            .child(icon(Icon::Resize))
+                            .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                window.start_window_resize(ResizeEdge::BottomRight)
+                            }),
+                    ),
+            )
+    }
+}
