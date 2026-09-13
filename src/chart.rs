@@ -1,4 +1,5 @@
 use crate::metrics::Snapshot;
+use crate::theme::CHART_GRID;
 use gpui::{prelude::*, *};
 use std::{
     collections::VecDeque,
@@ -6,10 +7,52 @@ use std::{
     time::{Duration, Instant},
 };
 pub const COLORS: [u32; 24] = [
-    0x55d6be, 0xff667f, 0x7da5ff, 0xffd166, 0xc084fc, 0x9ce167, 0xff9f54, 0x4dd9f1, 0xf781d1,
-    0x9ba6b5, 0xe8ed6d, 0x6488e8, 0x2fa78f, 0xd34562, 0xabc4ff, 0xd79c27, 0x975bd9, 0x5ba83c,
-    0xf6bd8b, 0x219dbc, 0xc146a0, 0xd2d9e4, 0xadb439, 0x495bc0,
+    0xe01b24, 0xff7800, 0xf6d32d, 0x33d17a, 0x26a269, 0x3584e4, 0x1c71d8, 0x9141ac, 0xc061cb,
+    0xe66100, 0x2ec27e, 0x62a0ea, 0xa51d2d, 0xc64600, 0xe5a50a, 0x2d7f5e, 0x1a5fb4, 0x613583,
+    0x813d9c, 0xff9b5e, 0x57e389, 0x99c1f1, 0xed333b, 0xf8e45c,
 ];
+
+const CURVE_STEPS: usize = 4;
+
+fn catmull(values: &[f32], segment: usize, t: f32) -> f32 {
+    let p0 = values[segment.saturating_sub(1)];
+    let p1 = values[segment];
+    let p2 = values[segment + 1];
+    let p3 = values[(segment + 2).min(values.len() - 1)];
+    let t2 = t * t;
+    let t3 = t2 * t;
+    let value = 0.5
+        * (2. * p1
+            + (-p0 + p2) * t
+            + (2. * p0 - 5. * p1 + 4. * p2 - p3) * t2
+            + (-p0 + 3. * p1 - 3. * p2 + p3) * t3);
+    value.clamp(p1.min(p2), p1.max(p2))
+}
+
+fn smooth_stroke(points: &[(f32, f32)], origin: Point<Pixels>, width: f32) -> Option<Path<Pixels>> {
+    let first = *points.first()?;
+    let absolute = |(x, y): (f32, f32)| point(origin.x + px(x), origin.y + px(y));
+    let mut path = PathBuilder::stroke(px(width));
+    path.move_to(absolute(first));
+    for i in 0..points.len() - 1 {
+        let p0 = points[i.saturating_sub(1)];
+        let p1 = points[i];
+        let p2 = points[i + 1];
+        let p3 = points[(i + 2).min(points.len() - 1)];
+        let y_min = p1.1.min(p2.1);
+        let y_max = p1.1.max(p2.1);
+        let control_a = (
+            p1.0 + (p2.0 - p0.0) / 6.,
+            (p1.1 + (p2.1 - p0.1) / 6.).clamp(y_min, y_max),
+        );
+        let control_b = (
+            p2.0 - (p3.0 - p1.0) / 6.,
+            (p2.1 - (p3.1 - p1.1) / 6.).clamp(y_min, y_max),
+        );
+        path.cubic_bezier_to(absolute(p2), absolute(control_a), absolute(control_b));
+    }
+    path.build().ok()
+}
 pub struct GraphSample {
     pub at: Instant,
     pub cores: Vec<f32>,
@@ -81,13 +124,13 @@ pub fn graph(
             }
             let origin = bounds.origin;
             let pt = |x: f32, y: f32| point(origin.x + px(x), origin.y + px(y));
-            for i in 0..=4 {
-                let y = h * i as f32 / 4.;
+            for i in 0..=5 {
+                let y = h * i as f32 / 5.;
                 let mut p = PathBuilder::stroke(px(1.));
                 p.move_to(pt(0., y));
                 p.line_to(pt(w, y));
                 if let Ok(p) = p.build() {
-                    window.paint_path(p, rgb(0x2a3037));
+                    window.paint_path(p, rgb(CHART_GRID));
                 }
             }
             for i in 0..=6 {
@@ -96,7 +139,7 @@ pub fn graph(
                 p.move_to(pt(x, 0.));
                 p.line_to(pt(x, h));
                 if let Ok(p) = p.build() {
-                    window.paint_path(p, rgba(0x2a303780));
+                    window.paint_path(p, rgba(0xd8daddb0));
                 }
             }
             // A one-poll visual delay permits interpolation using only real samples.
@@ -122,27 +165,29 @@ pub fn graph(
                     .fold(1024., f32::max)
                     * 1.1;
                 for series in 0..2 {
-                    let mut p = PathBuilder::stroke(px(1.6));
-                    for (i, (x, s)) in visible.iter().enumerate() {
-                        let v = if series == 0 { s.rx } else { s.tx };
-                        let pos = pt(*x, h * (1. - v / max));
-                        if i == 0 {
-                            p.move_to(pos);
-                        } else {
-                            p.line_to(pos);
-                        }
-                    }
-                    if let Ok(path) = p.build() {
-                        window.paint_path(path, rgb(if series == 0 { 0x7da5ff } else { 0xe8bc70 }));
+                    let points: Vec<_> = visible
+                        .iter()
+                        .map(|(x, s)| {
+                            let v = if series == 0 { s.rx } else { s.tx };
+                            (*x, h * (1. - v / max))
+                        })
+                        .collect();
+                    if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                        window.paint_path(path, rgb(if series == 0 { 0x3584e4 } else { 0xff7800 }));
                     }
                 }
             } else if let Some(uuid) = &gpu_uuid {
                 for series in 0..2 {
-                    let mut p = PathBuilder::stroke(px(1.6));
-                    let mut started = false;
+                    let mut points = vec![];
                     for (x, s) in &visible {
                         let Some(g) = s.gpus.iter().find(|g| &g.uuid == uuid) else {
-                            started = false;
+                            if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                                window.paint_path(
+                                    path,
+                                    rgb(if series == 0 { 0x2ec27e } else { 0x9141ac }),
+                                );
+                            }
+                            points.clear();
                             continue;
                         };
                         let v = if series == 0 {
@@ -153,19 +198,19 @@ pub fn graph(
                             None
                         };
                         let Some(v) = v else {
-                            started = false;
+                            if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                                window.paint_path(
+                                    path,
+                                    rgb(if series == 0 { 0x2ec27e } else { 0x9141ac }),
+                                );
+                            }
+                            points.clear();
                             continue;
                         };
-                        let point = pt(*x, h * (1. - v.clamp(0., 100.) / 100.));
-                        if started {
-                            p.line_to(point);
-                        } else {
-                            p.move_to(point);
-                            started = true;
-                        }
+                        points.push((*x, h * (1. - v.clamp(0., 100.) / 100.)));
                     }
-                    if let Ok(path) = p.build() {
-                        window.paint_path(path, rgb(if series == 0 { 0x7bbfa9 } else { 0xc4a478 }));
+                    if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                        window.paint_path(path, rgb(if series == 0 { 0x2ec27e } else { 0x9141ac }));
                     }
                 }
             } else {
@@ -175,24 +220,37 @@ pub fn graph(
                 }
                 let mut base = vec![0.; visible.len()];
                 for core in 0..n {
-                    // Adjacent samples form convex trapezoids. Emit triangles directly;
-                    // avoid running a general polygon tessellator on every animation frame.
+                    let top: Vec<_> = visible
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (_, s))| {
+                            base[i] + s.cores.get(core).copied().unwrap_or(0.) / n as f32
+                        })
+                        .collect();
+                    // Smooth each interval with bounded Catmull-Rom interpolation, then emit
+                    // triangles directly. This keeps the chart fluid without per-frame polygon
+                    // tessellation or values that overshoot the sampled data.
                     let mut path = Path::new(pt(0., 0.));
-                    for i in 1..visible.len() {
-                        let (x0, s0) = visible[i - 1];
-                        let (x1, s1) = visible[i];
-                        let top0 =
-                            base[i - 1] + s0.cores.get(core).copied().unwrap_or(0.) / n as f32;
-                        let top1 = base[i] + s1.cores.get(core).copied().unwrap_or(0.) / n as f32;
-                        path.move_to(pt(x0, h * (1. - top0 / 100.)));
-                        path.line_to(pt(x1, h * (1. - top1 / 100.)));
-                        path.line_to(pt(x1, h * (1. - base[i] / 100.)));
-                        path.line_to(pt(x0, h * (1. - base[i - 1] / 100.)));
+                    for i in 0..visible.len() - 1 {
+                        let x_start = visible[i].0;
+                        let x_end = visible[i + 1].0;
+                        for step in 0..CURVE_STEPS {
+                            let t0 = step as f32 / CURVE_STEPS as f32;
+                            let t1 = (step + 1) as f32 / CURVE_STEPS as f32;
+                            let x0 = x_start + (x_end - x_start) * t0;
+                            let x1 = x_start + (x_end - x_start) * t1;
+                            let top0 = catmull(&top, i, t0).clamp(0., 100.);
+                            let top1 = catmull(&top, i, t1).clamp(0., 100.);
+                            let base0 = catmull(&base, i, t0).clamp(0., 100.);
+                            let base1 = catmull(&base, i, t1).clamp(0., 100.);
+                            path.move_to(pt(x0, h * (1. - top0 / 100.)));
+                            path.line_to(pt(x1, h * (1. - top1 / 100.)));
+                            path.line_to(pt(x1, h * (1. - base1 / 100.)));
+                            path.line_to(pt(x0, h * (1. - base0 / 100.)));
+                        }
                     }
                     window.paint_path(path, rgb(COLORS[core % COLORS.len()]));
-                    for (i, (_, s)) in visible.iter().enumerate() {
-                        base[i] += s.cores.get(core).copied().unwrap_or(0.) / n as f32;
-                    }
+                    base = top;
                 }
             }
         },
@@ -241,7 +299,21 @@ impl Render for AnimatedChart {
 
 #[cfg(test)]
 mod tests {
-    use super::{Arc, Duration, History, Instant, Snapshot};
+    use super::{Arc, Duration, History, Instant, Snapshot, catmull};
+
+    #[test]
+    fn smoothing_stays_within_each_sample_interval() {
+        let values: [f32; 5] = [0., 80., 20., 100., 10.];
+        for segment in 0..values.len() - 1 {
+            let low = values[segment].min(values[segment + 1]);
+            let high = values[segment].max(values[segment + 1]);
+            for step in 0..=20 {
+                let value = catmull(&values, segment, step as f32 / 20.);
+                assert!((low..=high).contains(&value));
+            }
+        }
+    }
+
     #[test]
     fn pause_preserves_history_and_excludes_paused_wall_time() {
         let mut h = History::new();

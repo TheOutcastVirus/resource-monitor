@@ -1,12 +1,14 @@
-//! Shared visual vocabulary: neutral work surfaces and a single small-stroke icon set.
+//! Shared visual vocabulary: Ubuntu-native work surfaces and a single small-stroke icon set.
 use gpui::{prelude::*, *};
-pub const BG: u32 = 0x191b1f;
-pub const PANEL: u32 = 0x202328;
-pub const RAISED: u32 = 0x25282e;
-pub const LINE: u32 = 0x33373e;
-pub const TEXT: u32 = 0xd7dade;
-pub const MUTED: u32 = 0x959da7;
-pub const ACCENT: u32 = 0x88b7a4;
+pub const BG: u32 = 0xf7f7f7;
+pub const PANEL: u32 = 0xffffff;
+pub const RAISED: u32 = 0xf1f1f1;
+pub const LINE: u32 = 0xd9d9d9;
+pub const TEXT: u32 = 0x3d3846;
+pub const MUTED: u32 = 0x6f6b72;
+pub const ACCENT: u32 = 0x3584e4;
+pub const SELECTED: u32 = 0xe7e5ff;
+pub const CHART_GRID: u32 = 0xd8dadd;
 #[derive(Clone, Copy)]
 pub enum Icon {
     Close,
@@ -90,13 +92,13 @@ pub fn icon(kind: Icon) -> impl IntoElement {
 pub fn icon_button(id: impl Into<ElementId>, kind: Icon) -> Stateful<Div> {
     div()
         .id(id)
-        .w(px(26.))
-        .h(px(22.))
+        .w(px(28.))
+        .h(px(28.))
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(3.))
+        .rounded(px(6.))
         .cursor_pointer()
-        .hover(|d| d.bg(rgb(LINE)))
+        .hover(|d| d.bg(rgb(0xe7e7e7)))
         .child(icon(kind))
 }

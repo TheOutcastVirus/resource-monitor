@@ -63,12 +63,15 @@ pub struct Monitor {
 fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
     div()
         .id(id)
-        .px_2()
-        .py_1()
-        .rounded(px(4.))
+        .px(px(10.))
+        .py(px(5.))
+        .rounded(px(6.))
+        .bg(rgb(RAISED))
+        .border_1()
+        .border_color(rgb(LINE))
         .cursor_pointer()
-        .text_color(rgb(MUTED))
-        .hover(|s| s.bg(rgb(LINE)).text_color(rgb(TEXT)))
+        .text_color(rgb(TEXT))
+        .hover(|s| s.bg(rgb(0xe7e7e7)))
         .child(label.into())
 }
 fn muted(label: impl Into<SharedString>) -> Div {
@@ -111,7 +114,7 @@ impl Monitor {
         }
         let timer = cx.spawn_in(window, async move |weak, cx| {
             loop {
-                let delay = weak.update_in(cx, |this, window, cx| {
+                let delay = weak.update_in(cx, |this, _window, cx| {
                     let next = this.feed.latest.lock().ok().and_then(|mut s| s.take());
                     if !this.paused
                         && let Some(s) = next
@@ -130,7 +133,7 @@ impl Monitor {
                             });
                         }
                     }
-                    if this.paused || !window.is_window_active() {
+                    if this.paused {
                         250
                     } else {
                         1000 / this.settings.layout.fps
@@ -326,7 +329,9 @@ impl Monitor {
                             .flex()
                             .items_center()
                             .rounded(px(4.))
-                            .bg(rgb(BG))
+                            .bg(rgb(PANEL))
+                            .border_1()
+                            .border_color(rgb(LINE))
                             .child(
                                 button(
                                     SharedString::from(format!("load-{name}")),
@@ -470,9 +475,9 @@ impl Monitor {
             .flex()
             .flex_col()
             .size_full()
-            .px_3()
-            .pb_2()
-            .gap_2()
+            .px_4()
+            .pb_3()
+            .gap_3()
             .child(
                 div()
                     .flex()
@@ -487,6 +492,7 @@ impl Monitor {
                     ))
                     .child(
                         div()
+                            .font_weight(FontWeight::SEMIBOLD)
                             .text_color(rgb(ACCENT))
                             .child(format!("{:.1}%", s.cpu)),
                     )
@@ -497,20 +503,15 @@ impl Monitor {
                     )),
             )
             .child(self.chart(None))
-            .child(div().flex().flex_wrap().gap_x_3().gap_y_1().children(
+            .child(div().flex().flex_wrap().gap_x_1().gap_y_1().children(
                 s.cores.iter().enumerate().map(|(i, v)| {
                     div()
                         .flex()
                         .items_center()
                         .gap_1()
-                        .w(px(82.))
+                        .w(px(66.))
                         .text_size(px(10.))
-                        .child(
-                            div()
-                                .size(px(4.))
-                                .rounded_full()
-                                .bg(rgb(COLORS[i % COLORS.len()])),
-                        )
+                        .child(div().size(px(8.)).bg(rgb(COLORS[i % COLORS.len()])))
                         .child(muted(format!("{:02}", i)))
                         .child(div().flex_1().text_right().child(format!("{v:4.1}%")))
                 }),
@@ -534,6 +535,8 @@ impl Monitor {
                             .flex_1()
                             .h_full()
                             .overflow_hidden()
+                            .border_1()
+                            .border_color(rgb(LINE))
                             .child(if gpu.is_some() {
                                 self.gpu_chart.clone()
                             } else {
@@ -542,7 +545,7 @@ impl Monitor {
                     )
                     .child(
                         div()
-                            .w(px(26.))
+                            .w(px(32.))
                             .h_full()
                             .flex()
                             .flex_col()
@@ -550,7 +553,10 @@ impl Monitor {
                             .text_size(px(9.))
                             .text_color(rgb(MUTED))
                             .child("100%")
-                            .child("50%")
+                            .child("80%")
+                            .child("60%")
+                            .child("40%")
+                            .child("20%")
                             .child("0%"),
                     ),
             )
@@ -558,11 +564,15 @@ impl Monitor {
                 div()
                     .flex()
                     .justify_between()
-                    .pr(px(34.))
+                    .pr(px(40.))
                     .text_size(px(9.))
                     .text_color(rgb(MUTED))
-                    .child("60s")
-                    .child("30s")
+                    .child("1 min")
+                    .child("50 sec")
+                    .child("40 sec")
+                    .child("30 sec")
+                    .child("20 sec")
+                    .child("10 sec")
                     .child("now"),
             )
     }
@@ -577,10 +587,10 @@ impl Monitor {
             }
         };
         let segments = [
-            ("Used", s.memory_active, 0x79c7ad),
-            ("Cache", s.memory_cached, 0xe8bc70),
-            ("Buffers", s.memory_buffers, 0x8b9ef0),
-            ("Free", s.memory_free, 0x414e5b),
+            ("Used", s.memory_active, 0x2ec27e),
+            ("Cache", s.memory_cached, 0x9141ac),
+            ("Buffers", s.memory_buffers, 0x3584e4),
+            ("Free", s.memory_free, 0xd5d5d5),
         ];
         let swap = if s.swap_total > 0 {
             s.swap_used as f32 / s.swap_total as f32
@@ -588,8 +598,8 @@ impl Monitor {
             0.
         };
         div()
-            .px_3()
-            .pb_2()
+            .px_4()
+            .pb_3()
             .flex()
             .flex_col()
             .flex_1()
@@ -605,8 +615,8 @@ impl Monitor {
                         div()
                             .flex()
                             .flex_1()
-                            .h(px(9.))
-                            .rounded(px(2.))
+                            .h(px(12.))
+                            .rounded(px(3.))
                             .overflow_hidden()
                             .bg(rgb(LINE))
                             .children(segments.iter().map(|(_, v, c)| {
@@ -652,7 +662,7 @@ impl Monitor {
                                 div()
                                     .h_full()
                                     .w(relative(swap.clamp(0., 1.)))
-                                    .bg(rgb(0xa291c5)),
+                                    .bg(rgb(0xc061cb)),
                             ),
                     )
                     .child(div().text_size(px(10.)).child(if s.swap_total == 0 {
@@ -674,8 +684,8 @@ impl Monitor {
             .flex()
             .flex_col()
             .size_full()
-            .px_3()
-            .pb_2()
+            .px_4()
+            .pb_3()
             .gap_2()
             .child(
                 div()
@@ -706,10 +716,11 @@ impl Monitor {
                     .text_size(px(11.))
                     .child(
                         div()
-                            .text_color(rgb(ACCENT))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(rgb(0x2e7d4f))
                             .child(format!("GPU  {}", opt(g.utilization, "%"))),
                     )
-                    .child(div().text_color(rgb(0xc4a478)).child(format!(
+                    .child(div().text_color(rgb(0x7b3f94)).child(format!(
                         "VRAM  {} / {}",
                         metrics::bytes(g.memory_used),
                         metrics::bytes(g.memory_total)
@@ -730,7 +741,7 @@ impl Monitor {
             return self.no_gpu();
         };
         div()
-            .px_3()
+            .px_4()
             .pb_3()
             .flex()
             .flex_col()
@@ -813,8 +824,8 @@ impl Monitor {
     fn network(&self) -> Div {
         let n = &self.sample.network;
         div()
-            .px_3()
-            .pb_2()
+            .px_4()
+            .pb_3()
             .flex()
             .flex_col()
             .gap_2()
@@ -828,12 +839,14 @@ impl Monitor {
                     .text_size(px(11.))
                     .child(
                         div()
-                            .text_color(rgb(0x7da5ff))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(rgb(0x1c71d8))
                             .child(format!("↓ {}", crate::network::rate(n.rx_rate))),
                     )
                     .child(
                         div()
-                            .text_color(rgb(0xe8bc70))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(rgb(0xc64600))
                             .child(format!("↑ {}", crate::network::rate(n.tx_rate))),
                     )
                     .child(muted(format!(
@@ -909,7 +922,7 @@ impl Monitor {
             .flex_shrink_0()
             .w_full()
             .min_w_0()
-            .rounded(px(4.))
+            .rounded(px(8.))
             .bg(rgb(PANEL))
             .border_1()
             .border_color(rgb(LINE))
@@ -926,15 +939,23 @@ impl Monitor {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .h(px(32.))
+                    .h(px(38.))
                     .flex_shrink_0()
                     .px_3()
+                    .bg(rgb(PANEL))
+                    .border_b_1()
+                    .border_color(rgb(LINE))
                     .when(true, |d| {
                         d.cursor_move()
                             .on_drag(PanelDrag(p), |drag, _, _, cx| cx.new(|_| drag.clone()))
                             .child(icon(Icon::Grip))
                     })
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child(p.title()))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_size(px(12.))
+                            .child(p.title()),
+                    )
                     .child(muted(summary).text_size(px(10.)).ml_1())
                     .child(div().flex_1())
                     .when(self.settings.layout.columns > 1, |d| {
@@ -1029,7 +1050,7 @@ impl Monitor {
             .id("workspace")
             .flex()
             .flex_col()
-            .gap_3()
+            .gap(px(10.))
             .size_full()
             .min_h_0()
             .overflow_y_scroll()
@@ -1051,14 +1072,14 @@ impl Monitor {
                         div()
                             .id(("grid-row", i))
                             .flex()
-                            .gap_3()
+                            .gap(px(10.))
                             .h(px(height))
                             .flex_shrink_0()
                             .w_full()
                             .children(row.into_iter().map(|tile| {
                                 let weight = tile.span.min(columns) as f32;
                                 div()
-                                    .flex_basis(px(12. * (weight - 1.)))
+                                    .flex_basis(px(10. * (weight - 1.)))
                                     .flex_grow()
                                     .min_w_0()
                                     .h_full()
@@ -1069,7 +1090,7 @@ impl Monitor {
                                     .child(self.panel(tile.panel, height, cx))
                             }))
                             .when(empty > 0, |d| {
-                                d.child(div().flex_basis(px(12. * (empty as f32 - 1.))).map(
+                                d.child(div().flex_basis(px(10. * (empty as f32 - 1.))).map(
                                     |mut d| {
                                         d.style().flex_grow = Some(empty as f32);
                                         d
@@ -1115,8 +1136,8 @@ impl Render for Monitor {
                 .max(1.) as usize,
         );
         let available = f32::from(window.viewport_size().height)
-            - 80.
-            - if self.menu { 190. } else { 0. }
+            - 90.
+            - if self.menu { 210. } else { 0. }
             - if self.selected.is_some() { 140. } else { 0. }
             - if self.entry == Entry::Preset { 36. } else { 0. };
         self.fitted = self
@@ -1130,6 +1151,7 @@ impl Render for Monitor {
                     self.gpu_index,
                     self.query.clone(),
                     self.settings.layout.font_size,
+                    self.selected.as_ref().map(|process| process.pid),
                     cx,
                 )
             });
@@ -1169,9 +1191,9 @@ impl Render for Monitor {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgba(0x191b1fe0))
+            .bg(rgb(BG))
             .text_color(rgb(TEXT))
-            .font_family("JetBrains Mono")
+            .font_family("Noto Sans")
             .text_size(px(self.settings.layout.font_size))
             .on_key_down(cx.listener(Self::key))
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _window, cx| {
@@ -1228,12 +1250,22 @@ impl Render for Monitor {
             )
             .child(
                 div()
-                    .h(px(24.))
+                    .h(px(42.))
                     .flex_shrink_0()
                     .flex()
                     .items_center()
-                    .px_2()
+                    .px_3()
+                    .gap_1()
+                    .bg(rgb(PANEL))
+                    .border_b_1()
+                    .border_color(rgb(LINE))
                     .text_size(px(11.))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_size(px(13.))
+                            .child("Strata"),
+                    )
                     .child(
                         div()
                             .id("top-drag")
@@ -1242,6 +1274,51 @@ impl Render for Monitor {
                             .on_mouse_down(MouseButton::Left, |_, window, _| {
                                 window.start_window_move()
                             }),
+                    )
+                    .child(
+                        button("top-pause", if self.paused { "Resume" } else { "Pause" })
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(icon(if self.paused { Icon::Play } else { Icon::Pause }))
+                            .when(self.paused, |d| d.text_color(rgb(0xc64600)))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.toggle_pause();
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        button(
+                            "top-search",
+                            SharedString::from(if self.entry == Entry::Search {
+                                format!("Filter: {}▏", self.query)
+                            } else if self.query.is_empty() {
+                                "Filter".into()
+                            } else {
+                                format!("Filter: {}", self.query)
+                            }),
+                        )
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(icon(Icon::Search))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.entry = Entry::Search;
+                            window.focus(&this.focus);
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        button("top-layouts", "Layout")
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(icon(Icon::Columns))
+                            .when(self.menu, |s| s.text_color(rgb(ACCENT)))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.menu = !this.menu;
+                                cx.notify();
+                            })),
                     )
                     .child(
                         icon_button("minimize", Icon::Minimize)
@@ -1256,13 +1333,19 @@ impl Render for Monitor {
                             .on_click(|_, window, _| window.remove_window()),
                     ),
             )
-            .child(div().flex_1().min_h_0().p_3().child(self.workspace(cx)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .p(px(10.))
+                    .child(self.workspace(cx)),
+            )
             .when_some(self.selected.clone(), |d, p| {
                 d.child(
                     div()
                         .px_4()
                         .py_2()
-                        .bg(rgb(RAISED))
+                        .bg(rgb(PANEL))
                         .border_t_1()
                         .border_color(rgb(LINE))
                         .flex()
@@ -1323,7 +1406,7 @@ impl Render for Monitor {
             })
             .when(self.menu, |d| d.child(self.layout_menu(cx)))
             .when(self.entry == Entry::Preset, |d| {
-                d.child(div().px_4().py_2().bg(rgb(LINE)).child(format!(
+                d.child(div().px_4().py_2().bg(rgb(RAISED)).child(format!(
                     "Preset name: {}▏   Enter to save · Esc to cancel",
                     self.preset_name
                 )))
@@ -1348,31 +1431,23 @@ impl Render for Monitor {
             .child(
                 div()
                     .px_3()
-                    .h(px(32.))
+                    .h(px(28.))
                     .flex_shrink_0()
                     .border_t_1()
                     .border_color(rgb(LINE))
                     .flex()
                     .items_center()
-                    .gap_2()
                     .text_size(px(10.))
                     .text_color(rgb(MUTED))
-                    .child(
-                        button("pause", if self.paused { "Resume" } else { "Pause" })
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(icon(if self.paused { Icon::Play } else { Icon::Pause }))
-                            .when(self.paused, |d| d.text_color(rgb(0xe8bc70)))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.toggle_pause();
-                                cx.notify();
-                            })),
-                    )
-                    .child(muted(format!(
-                        "{:.1}s",
-                        self.settings.layout.poll_ms as f32 / 1000.
-                    )))
+                    .bg(rgb(PANEL))
+                    .child(muted(if self.paused {
+                        "Measurements paused".into()
+                    } else {
+                        format!(
+                            "Updating every {:.1}s",
+                            self.settings.layout.poll_ms as f32 / 1000.
+                        )
+                    }))
                     .child(
                         div()
                             .flex_1()
@@ -1380,39 +1455,6 @@ impl Render for Monitor {
                             .on_mouse_down(MouseButton::Left, |_, window, _| {
                                 window.start_window_move()
                             }),
-                    )
-                    .child(
-                        button(
-                            "search",
-                            SharedString::from(if self.entry == Entry::Search {
-                                format!("Filter: {}▏", self.query)
-                            } else if self.query.is_empty() {
-                                "Filter processes".into()
-                            } else {
-                                format!("Filter: {}", self.query)
-                            }),
-                        )
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(icon(Icon::Search))
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.entry = Entry::Search;
-                            window.focus(&this.focus);
-                            cx.notify();
-                        })),
-                    )
-                    .child(
-                        button("layouts", "Layout")
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(icon(Icon::Columns))
-                            .when(self.menu, |s| s.text_color(rgb(ACCENT)))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.menu = !this.menu;
-                                cx.notify();
-                            })),
                     )
                     .child(
                         div()

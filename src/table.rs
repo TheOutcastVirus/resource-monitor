@@ -1,5 +1,5 @@
 use crate::metrics::{Process, Snapshot, bytes};
-use crate::theme::{ACCENT, LINE, MUTED, RAISED, TEXT};
+use crate::theme::{ACCENT, LINE, MUTED, PANEL, RAISED, SELECTED, TEXT};
 use gpui::{prelude::*, *};
 use std::sync::Arc;
 #[derive(Clone, Copy, PartialEq)]
@@ -23,6 +23,7 @@ pub struct ProcessTable {
     pub gpu_index: usize,
     pub query: String,
     pub font_size: f32,
+    pub selected_pid: Option<u32>,
     rows: Vec<usize>,
     sort: Sort,
     descending: bool,
@@ -36,6 +37,7 @@ impl ProcessTable {
             gpu_index: 0,
             query: String::new(),
             font_size: 12.,
+            selected_pid: None,
             rows: vec![],
             sort: if gpu { Sort::Memory } else { Sort::Cpu },
             descending: true,
@@ -47,17 +49,20 @@ impl ProcessTable {
         gpu_index: usize,
         query: String,
         font_size: f32,
+        selected_pid: Option<u32>,
         cx: &mut Context<Self>,
     ) {
         if !Arc::ptr_eq(&sample, &self.sample)
             || self.gpu_index != gpu_index
             || self.query != query
             || self.font_size != font_size
+            || self.selected_pid != selected_pid
         {
             self.sample = sample;
             self.gpu_index = gpu_index;
             self.query = query;
             self.font_size = font_size;
+            self.selected_pid = selected_pid;
             self.reindex();
             cx.notify();
         }
@@ -152,6 +157,8 @@ impl Render for ProcessTable {
                     .items_center()
                     .px_3()
                     .bg(rgb(RAISED))
+                    .border_b_1()
+                    .border_color(rgb(LINE))
                     .text_size(px(10.))
                     .children(headers.into_iter().map(|(label, sort, width)| {
                         div()
@@ -226,7 +233,7 @@ impl Render for ProcessTable {
                                         (
                                             p.gpu_memory.map(bytes).unwrap_or("—".into()),
                                             76.,
-                                            0xc4a478,
+                                            0x7b3f94,
                                         ),
                                         (format!("{:.1}%", p.cpu), 58., MUTED),
                                     ]);
@@ -238,12 +245,12 @@ impl Render for ProcessTable {
                                         (
                                             p.tcp.map(|v| v.to_string()).unwrap_or("—".into()),
                                             35.,
-                                            0x7da5ff,
+                                            0x1c71d8,
                                         ),
                                         (
                                             p.udp.map(|v| v.to_string()).unwrap_or("—".into()),
                                             35.,
-                                            0x7da5ff,
+                                            0x1c71d8,
                                         ),
                                     ]);
                                 }
@@ -256,8 +263,14 @@ impl Render for ProcessTable {
                                         .flex()
                                         .items_center()
                                         .text_size(px(this.font_size))
-                                        .when(i % 2 == 1, |d| d.bg(rgba(0xffffff03)))
-                                        .hover(|d| d.bg(rgb(LINE)))
+                                        .bg(rgb(PANEL))
+                                        .border_b_1()
+                                        .border_color(rgb(0xeeeeee))
+                                        .when(i % 2 == 1, |d| d.bg(rgb(0xfafafa)))
+                                        .when(this.selected_pid == Some(pid), |d| {
+                                            d.bg(rgb(SELECTED))
+                                        })
+                                        .hover(|d| d.bg(rgb(0xececec)))
                                         .cursor_pointer()
                                         .child(
                                             div()

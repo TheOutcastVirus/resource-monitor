@@ -8,8 +8,8 @@ A native Linux resource monitor built in Rust with [GPUI](https://gpui.rs/). CPU
 - Network RX/TX history, aggregate totals, and per-interface rates. TCP/UDP socket counts in system process rows.
 - Cached, virtualized system and GPU process tables. Click column headings to sort; click a row for its full command, user, state, thread count, CPU and memory details. Click a PID to copy it; the detail view also copies the complete command. Graphics/compute entries are merged by PID.
 - Always-on panel dragging, height resizing, mixed-width rows, one to three columns, panel hiding, portrait/landscape layouts, and named presets.
-- One font throughout, opaque panels, and a slightly translucent workspace. A slim, unlabelled top drag strip holds window controls; there is no branded header.
-- Timestamped graph interpolation, independent polling and animation rates, and pause/resume that preserves history and excludes paused wall time.
+- An Ubuntu-native light interface with compact controls, ruled system graphs, dense process tables, and responsive bordered panels.
+- Timestamped, bounded graph smoothing, independent polling and animation rates, and pause/resume that preserves history and excludes paused wall time.
 
 ## Build and run
 
@@ -24,7 +24,7 @@ sudo apt install build-essential pkg-config libfontconfig1-dev libfreetype6-dev 
 cargo run --release --locked
 ```
 
-GPUI supports both Wayland and X11. The UI requests JetBrains Mono; install that font for the intended appearance. Fontconfig supplies a fallback if it is absent. Transparency depends on the desktop compositor.
+GPUI supports both Wayland and X11. The UI requests Noto Sans to match the surrounding GNOME desktop; Fontconfig supplies a fallback if it is absent.
 
 ```sh
 cargo test --locked
@@ -78,7 +78,7 @@ Network totals sum non-loopback interfaces. Virtual bridges and physical interfa
 
 `src/metrics.rs` owns the sampler thread and Linux/NVML adapters. It publishes the latest snapshot through a single-slot mailbox; the UI never waits for sampling and no subprocess is launched for a poll. `/proc` CPU deltas exclude guest double-counting and account for PID reuse. NVIDIA is loaded dynamically through `nvml-wrapper`.
 
-`src/chart.rs` keeps only compact graph samples in a bounded history. Charts share one animation clock at 30 fps by default (15/30/60 selectable); unfocused windows throttle to 4 fps. Offscreen chart painting is skipped. CPU layers emit trapezoid triangles directly, avoiding per-frame polygon tessellation. Process rows are virtualized with GPUI's `uniform_list`, inside cached views that avoid rebuilding unrelated tables for chart animation. Release builds use thin LTO and stripped symbols.
+`src/chart.rs` keeps only compact graph samples in a bounded history. Charts share one animation clock at 30 fps by default (15/30/60 selectable), maintaining the selected rate when unfocused. Offscreen chart painting is skipped. Network and GPU lines use bounded Bézier curves; CPU layers use bounded Catmull–Rom subdivisions while still emitting triangles directly, avoiding per-frame polygon tessellation and visual overshoot. Process rows are virtualized with GPUI's `uniform_list`, inside cached views that avoid rebuilding unrelated tables for chart animation. Release builds use thin LTO and stripped symbols.
 
 `src/layout.rs` owns validated, serializable workspace state and atomic file replacement. `src/ui.rs` renders the panels and interactions. `src/theme.rs` owns shared colors and the vector icon family; `DESIGN.md` records the visual conventions. To add AMD support, supply the same normalized `Gpu`/`Process` readings through a separate driver adapter; the charts and panels are vendor-independent. NVIDIA is the only implemented GPU sampler in this version.
 

@@ -34,9 +34,9 @@ impl Panel {
     }
     pub fn min_height(self) -> f32 {
         match self {
-            Self::Cpu => 200.,
+            Self::Cpu => 230.,
             Self::Memory => 140.,
-            Self::Gpu => 160.,
+            Self::Gpu => 200.,
             Self::GpuDetails => 170.,
             Self::Network => 220.,
             _ => 140.,
@@ -44,10 +44,10 @@ impl Panel {
     }
     pub fn height(self) -> f32 {
         match self {
-            Self::Cpu => 280.,
+            Self::Cpu => 300.,
             Self::Memory => 140.,
             Self::Processes => 300.,
-            Self::Gpu => 234.,
+            Self::Gpu => 260.,
             Self::Network => 220.,
             Self::GpuDetails => 170.,
             Self::GpuProcesses => 300.,

@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-13T00:58:39Z",
+  "title": "Design System: Strata",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Ubuntu Action Blue", "canonical": "#3584e4", "tonalRamp": ["oklch(from #3584e4 0.15 c h)", "oklch(from #3584e4 0.27 c h)", "oklch(from #3584e4 0.39 c h)", "oklch(from #3584e4 0.51 c h)", "oklch(from #3584e4 0.63 c h)", "oklch(from #3584e4 0.75 c h)", "oklch(from #3584e4 0.87 c h)", "oklch(from #3584e4 0.95 c h)"] },
+      "workspace": { "role": "neutral", "displayName": "Pale Workspace", "canonical": "#f7f7f7", "tonalRamp": ["oklch(from #f7f7f7 0.15 c h)", "oklch(from #f7f7f7 0.27 c h)", "oklch(from #f7f7f7 0.39 c h)", "oklch(from #f7f7f7 0.51 c h)", "oklch(from #f7f7f7 0.63 c h)", "oklch(from #f7f7f7 0.75 c h)", "oklch(from #f7f7f7 0.87 c h)", "oklch(from #f7f7f7 0.95 c h)"] },
+      "panel": { "role": "neutral", "displayName": "Instrument White", "canonical": "#ffffff", "tonalRamp": ["oklch(from #ffffff 0.15 c h)", "oklch(from #ffffff 0.27 c h)", "oklch(from #ffffff 0.39 c h)", "oklch(from #ffffff 0.51 c h)", "oklch(from #ffffff 0.63 c h)", "oklch(from #ffffff 0.75 c h)", "oklch(from #ffffff 0.87 c h)", "oklch(from #ffffff 0.95 c h)"] },
+      "raised-control": { "role": "neutral", "displayName": "Control Gray", "canonical": "#f1f1f1", "tonalRamp": ["oklch(from #f1f1f1 0.15 c h)", "oklch(from #f1f1f1 0.27 c h)", "oklch(from #f1f1f1 0.39 c h)", "oklch(from #f1f1f1 0.51 c h)", "oklch(from #f1f1f1 0.63 c h)", "oklch(from #f1f1f1 0.75 c h)", "oklch(from #f1f1f1 0.87 c h)", "oklch(from #f1f1f1 0.95 c h)"] },
+      "separator": { "role": "neutral", "displayName": "Separator Gray", "canonical": "#d9d9d9", "tonalRamp": ["oklch(from #d9d9d9 0.15 c h)", "oklch(from #d9d9d9 0.27 c h)", "oklch(from #d9d9d9 0.39 c h)", "oklch(from #d9d9d9 0.51 c h)", "oklch(from #d9d9d9 0.63 c h)", "oklch(from #d9d9d9 0.75 c h)", "oklch(from #d9d9d9 0.87 c h)", "oklch(from #d9d9d9 0.95 c h)"] },
+      "chart-grid": { "role": "neutral", "displayName": "Graph Paper Gray", "canonical": "#d8dadd", "tonalRamp": ["oklch(from #d8dadd 0.15 c h)", "oklch(from #d8dadd 0.27 c h)", "oklch(from #d8dadd 0.39 c h)", "oklch(from #d8dadd 0.51 c h)", "oklch(from #d8dadd 0.63 c h)", "oklch(from #d8dadd 0.75 c h)", "oklch(from #d8dadd 0.87 c h)", "oklch(from #d8dadd 0.95 c h)"] },
+      "text": { "role": "neutral", "displayName": "Ink", "canonical": "#3d3846", "tonalRamp": ["oklch(from #3d3846 0.15 c h)", "oklch(from #3d3846 0.27 c h)", "oklch(from #3d3846 0.39 c h)", "oklch(from #3d3846 0.51 c h)", "oklch(from #3d3846 0.63 c h)", "oklch(from #3d3846 0.75 c h)", "oklch(from #3d3846 0.87 c h)", "oklch(from #3d3846 0.95 c h)"] },
+      "text-muted": { "role": "neutral", "displayName": "Secondary Ink", "canonical": "#6f6b72", "tonalRamp": ["oklch(from #6f6b72 0.15 c h)", "oklch(from #6f6b72 0.27 c h)", "oklch(from #6f6b72 0.39 c h)", "oklch(from #6f6b72 0.51 c h)", "oklch(from #6f6b72 0.63 c h)", "oklch(from #6f6b72 0.75 c h)", "oklch(from #6f6b72 0.87 c h)", "oklch(from #6f6b72 0.95 c h)"] },
+      "selection": { "role": "primary", "displayName": "Lilac Selection", "canonical": "#e7e5ff", "tonalRamp": ["oklch(from #e7e5ff 0.15 c h)", "oklch(from #e7e5ff 0.27 c h)", "oklch(from #e7e5ff 0.39 c h)", "oklch(from #e7e5ff 0.51 c h)", "oklch(from #e7e5ff 0.63 c h)", "oklch(from #e7e5ff 0.75 c h)", "oklch(from #e7e5ff 0.87 c h)", "oklch(from #e7e5ff 0.95 c h)"] },
+      "row-alternate": { "role": "neutral", "displayName": "Alternate Row", "canonical": "#fafafa", "tonalRamp": ["oklch(from #fafafa 0.15 c h)", "oklch(from #fafafa 0.27 c h)", "oklch(from #fafafa 0.39 c h)", "oklch(from #fafafa 0.51 c h)", "oklch(from #fafafa 0.63 c h)", "oklch(from #fafafa 0.75 c h)", "oklch(from #fafafa 0.87 c h)", "oklch(from #fafafa 0.95 c h)"] },
+      "row-hover": { "role": "neutral", "displayName": "Row Hover", "canonical": "#ececec", "tonalRamp": ["oklch(from #ececec 0.15 c h)", "oklch(from #ececec 0.27 c h)", "oklch(from #ececec 0.39 c h)", "oklch(from #ececec 0.51 c h)", "oklch(from #ececec 0.63 c h)", "oklch(from #ececec 0.75 c h)", "oklch(from #ececec 0.87 c h)", "oklch(from #ececec 0.95 c h)"] },
+      "control-hover": { "role": "neutral", "displayName": "Control Hover", "canonical": "#e7e7e7", "tonalRamp": ["oklch(from #e7e7e7 0.15 c h)", "oklch(from #e7e7e7 0.27 c h)", "oklch(from #e7e7e7 0.39 c h)", "oklch(from #e7e7e7 0.51 c h)", "oklch(from #e7e7e7 0.63 c h)", "oklch(from #e7e7e7 0.75 c h)", "oklch(from #e7e7e7 0.87 c h)", "oklch(from #e7e7e7 0.95 c h)"] },
+      "receive": { "role": "secondary", "displayName": "Receive Blue", "canonical": "#1c71d8", "tonalRamp": ["oklch(from #1c71d8 0.15 c h)", "oklch(from #1c71d8 0.27 c h)", "oklch(from #1c71d8 0.39 c h)", "oklch(from #1c71d8 0.51 c h)", "oklch(from #1c71d8 0.63 c h)", "oklch(from #1c71d8 0.75 c h)", "oklch(from #1c71d8 0.87 c h)", "oklch(from #1c71d8 0.95 c h)"] },
+      "transmit": { "role": "secondary", "displayName": "Transmit Orange", "canonical": "#c64600", "tonalRamp": ["oklch(from #c64600 0.15 c h)", "oklch(from #c64600 0.27 c h)", "oklch(from #c64600 0.39 c h)", "oklch(from #c64600 0.51 c h)", "oklch(from #c64600 0.63 c h)", "oklch(from #c64600 0.75 c h)", "oklch(from #c64600 0.87 c h)", "oklch(from #c64600 0.95 c h)"] },
+      "gpu": { "role": "secondary", "displayName": "GPU Green", "canonical": "#2e7d4f", "tonalRamp": ["oklch(from #2e7d4f 0.15 c h)", "oklch(from #2e7d4f 0.27 c h)", "oklch(from #2e7d4f 0.39 c h)", "oklch(from #2e7d4f 0.51 c h)", "oklch(from #2e7d4f 0.63 c h)", "oklch(from #2e7d4f 0.75 c h)", "oklch(from #2e7d4f 0.87 c h)", "oklch(from #2e7d4f 0.95 c h)"] },
+      "memory-used": { "role": "secondary", "displayName": "Memory Used Green", "canonical": "#2ec27e", "tonalRamp": ["oklch(from #2ec27e 0.15 c h)", "oklch(from #2ec27e 0.27 c h)", "oklch(from #2ec27e 0.39 c h)", "oklch(from #2ec27e 0.51 c h)", "oklch(from #2ec27e 0.63 c h)", "oklch(from #2ec27e 0.75 c h)", "oklch(from #2ec27e 0.87 c h)", "oklch(from #2ec27e 0.95 c h)"] },
+      "memory-cache": { "role": "secondary", "displayName": "Memory Cache Purple", "canonical": "#9141ac", "tonalRamp": ["oklch(from #9141ac 0.15 c h)", "oklch(from #9141ac 0.27 c h)", "oklch(from #9141ac 0.39 c h)", "oklch(from #9141ac 0.51 c h)", "oklch(from #9141ac 0.63 c h)", "oklch(from #9141ac 0.75 c h)", "oklch(from #9141ac 0.87 c h)", "oklch(from #9141ac 0.95 c h)"] },
+      "memory-buffer": { "role": "secondary", "displayName": "Memory Buffer Blue", "canonical": "#3584e4", "tonalRamp": ["oklch(from #3584e4 0.15 c h)", "oklch(from #3584e4 0.27 c h)", "oklch(from #3584e4 0.39 c h)", "oklch(from #3584e4 0.51 c h)", "oklch(from #3584e4 0.63 c h)", "oklch(from #3584e4 0.75 c h)", "oklch(from #3584e4 0.87 c h)", "oklch(from #3584e4 0.95 c h)"] },
+      "memory-free": { "role": "neutral", "displayName": "Memory Free Gray", "canonical": "#d5d5d5", "tonalRamp": ["oklch(from #d5d5d5 0.15 c h)", "oklch(from #d5d5d5 0.27 c h)", "oklch(from #d5d5d5 0.39 c h)", "oklch(from #d5d5d5 0.51 c h)", "oklch(from #d5d5d5 0.63 c h)", "oklch(from #d5d5d5 0.75 c h)", "oklch(from #d5d5d5 0.87 c h)", "oklch(from #d5d5d5 0.95 c h)"] },
+      "swap": { "role": "secondary", "displayName": "Swap Magenta", "canonical": "#c061cb", "tonalRamp": ["oklch(from #c061cb 0.15 c h)", "oklch(from #c061cb 0.27 c h)", "oklch(from #c061cb 0.39 c h)", "oklch(from #c061cb 0.51 c h)", "oklch(from #c061cb 0.63 c h)", "oklch(from #c061cb 0.75 c h)", "oklch(from #c061cb 0.87 c h)", "oklch(from #c061cb 0.95 c h)"] },
+      "vram": { "role": "secondary", "displayName": "VRAM Purple", "canonical": "#7b3f94", "tonalRamp": ["oklch(from #7b3f94 0.15 c h)", "oklch(from #7b3f94 0.27 c h)", "oklch(from #7b3f94 0.39 c h)", "oklch(from #7b3f94 0.51 c h)", "oklch(from #7b3f94 0.63 c h)", "oklch(from #7b3f94 0.75 c h)", "oklch(from #7b3f94 0.87 c h)", "oklch(from #7b3f94 0.95 c h)"] }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Panel Title", "purpose": "Semibold panel names and emphasized telemetry labels." },
+      "body": { "displayName": "Dense Body", "purpose": "Process rows, controls, and ordinary values; user-adjustable from 10 to 16 px." },
+      "measurement": { "displayName": "Measurement", "purpose": "Prominent live values and application title moments." },
+      "label": { "displayName": "Compact Label", "purpose": "Table headings, summaries, status, and legends." },
+      "micro": { "displayName": "Axis Microcopy", "purpose": "Graph axes and dense meter annotations only." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "telemetry-window", "value": "62s", "purpose": "Bounds retained graph samples to the one-minute visible history plus interpolation margin." },
+      { "name": "chart-interpolation-delay", "value": "1 poll", "purpose": "Allows smooth movement using only real samples." },
+      { "name": "chart-frame-rate", "value": "15 | 30 | 60 fps", "purpose": "User-selectable redraw cadence for live graphs; 30 fps is the default." }
+    ],
+    "breakpoints": [
+      { "name": "two-column-min", "value": "984px" },
+      { "name": "three-column-min", "value": "1464px" }
+    ],
+    "dataSeries": {
+      "cpuCores": ["#e01b24", "#ff7800", "#f6d32d", "#33d17a", "#26a269", "#3584e4", "#1c71d8", "#9141ac", "#c061cb", "#e66100", "#2ec27e", "#62a0ea", "#a51d2d", "#c64600", "#e5a50a", "#2d7f5e", "#1a5fb4", "#613583", "#813d9c", "#ff9b5e", "#57e389", "#99c1f1", "#ed333b", "#f8e45c"],
+      "mapping": "Zero-based logical-core index. Reuse cyclically only when the machine reports more than 24 logical cores."
+    }
+  },
+  "components": [
+    {
+      "name": "Compact Button",
+      "kind": "button",
+      "refersTo": "compact-button",
+      "description": "The standard GNOME-like control for toolbar and layout actions.",
+      "html": "<button class=\"ds-compact-button\">Layout</button>",
+      "css": ".ds-compact-button { appearance: none; border: 1px solid #d9d9d9; border-radius: 6px; background: #f1f1f1; color: #3d3846; padding: 5px 10px; font: 400 12px 'Noto Sans', Ubuntu, sans-serif; cursor: pointer; } .ds-compact-button:hover { background: #e7e7e7; } .ds-compact-button:focus-visible { outline: 2px solid #3584e4; outline-offset: 1px; } .ds-compact-button:active { color: #3584e4; }"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "A restrained 28 px control for window, copy, hide, and dismiss actions.",
+      "html": "<button class=\"ds-icon-button\" aria-label=\"Hide panel\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M4 4l8 8M12 4l-8 8\"/></svg></button>",
+      "css": ".ds-icon-button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 6px; background: #fff; color: #6f6b72; cursor: pointer; } .ds-icon-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.15; } .ds-icon-button:hover { background: #e7e7e7; } .ds-icon-button:focus-visible { outline: 2px solid #3584e4; outline-offset: 1px; } .ds-icon-button:active { color: #3d3846; }"
+    },
+    {
+      "name": "Configurable Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "The primary white instrument surface with persistent move, span, hide, and resize affordances.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-panel-header\"><span class=\"ds-panel-grip\" aria-hidden=\"true\">⠿</span><strong>CPU</strong><small>24 logical cores</small><span class=\"ds-panel-space\"></span><button>Full width</button><button aria-label=\"Hide panel\">×</button></header><div class=\"ds-panel-body\">Telemetry content</div><div class=\"ds-panel-resize\"><i></i></div></section>",
+      "css": ".ds-panel { overflow: hidden; border: 1px solid #d9d9d9; border-radius: 8px; background: #fff; color: #3d3846; font: 400 12px 'Noto Sans', Ubuntu, sans-serif; } .ds-panel-header { height: 38px; padding: 0 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #d9d9d9; } .ds-panel-header strong { font-weight: 600; } .ds-panel-header small, .ds-panel-grip { color: #6f6b72; } .ds-panel-space { flex: 1; } .ds-panel-header button { border: 1px solid #d9d9d9; border-radius: 6px; background: #f1f1f1; padding: 5px 10px; color: #3d3846; } .ds-panel-header button:hover, .ds-panel-header button:active { background: #e7e7e7; } .ds-panel-header button:focus-visible { outline: 2px solid #3584e4; } .ds-panel-body { min-height: 90px; padding: 12px 16px; } .ds-panel-resize { height: 9px; display: grid; place-items: center; } .ds-panel-resize:hover { background: #d9d9d9; } .ds-panel-resize i { width: 22px; height: 1px; background: #d9d9d9; }"
+    },
+    {
+      "name": "Process Table",
+      "kind": "custom",
+      "description": "A virtualized dense table treatment with blue sort state, striped rows, explicit absence, and right-aligned numeric data.",
+      "html": "<table class=\"ds-process-table\"><thead><tr><th>PID</th><th>Command</th><th class=\"ds-active\">CPU ↓</th><th>RAM</th></tr></thead><tbody><tr><td>2184</td><td>blender</td><td>73.2%</td><td>4.8 GiB</td></tr><tr class=\"ds-selected\"><td>3310</td><td>renderer</td><td>—</td><td>1.2 GiB</td></tr></tbody></table>",
+      "css": ".ds-process-table { width: 100%; border-collapse: collapse; background: #fff; color: #3d3846; font: 400 12px 'Noto Sans', Ubuntu, sans-serif; } .ds-process-table th { height: 26px; padding: 0 12px; background: #f1f1f1; color: #6f6b72; border-bottom: 1px solid #d9d9d9; font-size: 10px; font-weight: 400; text-align: right; cursor: pointer; } .ds-process-table th:nth-child(2), .ds-process-table td:nth-child(2) { text-align: left; } .ds-process-table th.ds-active { color: #3584e4; } .ds-process-table th:hover { color: #3d3846; } .ds-process-table th:focus-visible { outline: 2px solid #3584e4; outline-offset: -2px; } .ds-process-table td { height: 25px; padding: 0 12px; border-bottom: 1px solid #eee; text-align: right; } .ds-process-table tr:nth-child(even) { background: #fafafa; } .ds-process-table tbody tr:hover { background: #ececec; } .ds-process-table tr.ds-selected { background: #e7e5ff; }"
+    },
+    {
+      "name": "Memory Meter",
+      "kind": "custom",
+      "description": "A compact segmented meter with stable semantic order for Used, Cache, Buffers, and Free.",
+      "html": "<div class=\"ds-memory\"><span>RAM</span><div class=\"ds-memory-track\" aria-label=\"Memory allocation\"><i class=\"ds-used\"></i><i class=\"ds-cache\"></i><i class=\"ds-buffers\"></i><i class=\"ds-free\"></i></div><small>12.4 / 32 GiB</small></div>",
+      "css": ".ds-memory { display: flex; align-items: center; gap: 12px; color: #3d3846; font: 400 12px 'Noto Sans', Ubuntu, sans-serif; } .ds-memory > span { width: 36px; color: #6f6b72; } .ds-memory-track { flex: 1; height: 12px; display: flex; overflow: hidden; border-radius: 3px; background: #d9d9d9; } .ds-memory-track i { display: block; height: 100%; } .ds-used { width: 38%; background: #2ec27e; } .ds-cache { width: 22%; background: #9141ac; } .ds-buffers { width: 8%; background: #3584e4; } .ds-free { flex: 1; background: #d5d5d5; } .ds-memory small { font-size: 10px; } .ds-memory:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ruled Telemetry Graph",
+      "kind": "custom",
+      "description": "A visual reference for the GPU-rendered graph frame and full logical-core legend; production CPU fill remains direct triangle emission.",
+      "html": "<figure class=\"ds-chart\"><div class=\"ds-chart-frame\"><svg viewBox=\"0 0 300 90\" preserveAspectRatio=\"none\" aria-label=\"CPU history\"><path d=\"M0 74 C45 74 58 36 104 42 S170 68 212 30 S265 55 300 18\"/></svg></div><div class=\"ds-chart-axis\"><span>1 min</span><span>now</span></div><div class=\"ds-core-legend\"></div></figure>",
+      "css": ".ds-chart { margin: 0; color: #6f6b72; font: 400 10px 'Noto Sans', Ubuntu, sans-serif; } .ds-chart-frame { height: 90px; border: 1px solid #d9d9d9; background-color: #fff; background-image: linear-gradient(to right, rgba(216,218,221,.69) 1px, transparent 1px), linear-gradient(to bottom, #d8dadd 1px, transparent 1px); background-size: 16.666% 100%, 100% 20%; overflow: hidden; } .ds-chart svg { width: 100%; height: 100%; fill: none; stroke: #3584e4; stroke-width: 1.8; } .ds-chart-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 9px; } .ds-core-legend { margin-top: 8px; height: 24px; background: linear-gradient(90deg, #e01b24 0 4.16%, #ff7800 4.16% 8.33%, #f6d32d 8.33% 12.5%, #33d17a 12.5% 16.66%, #26a269 16.66% 20.83%, #3584e4 20.83% 25%, #1c71d8 25% 29.16%, #9141ac 29.16% 33.33%, #c061cb 33.33% 37.5%, #e66100 37.5% 41.66%, #2ec27e 41.66% 45.83%, #62a0ea 45.83% 50%, #a51d2d 50% 54.16%, #c64600 54.16% 58.33%, #e5a50a 58.33% 62.5%, #2d7f5e 62.5% 66.66%, #1a5fb4 66.66% 70.83%, #613583 70.83% 75%, #813d9c 75% 79.16%, #ff9b5e 79.16% 83.33%, #57e389 83.33% 87.5%, #99c1f1 87.5% 91.66%, #ed333b 91.66% 95.83%, #f8e45c 95.83% 100%); } .ds-chart:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Ubuntu Instrument",
+    "overview": "Strata should feel immediately at home on a contemporary Ubuntu desktop: pale neutral workspace, crisp white instruments, Noto Sans, compact controls, and quiet gray rules. The interface is an operating surface for sustained observation, so density, legibility, and stable visual meaning carry more weight than decoration.\n\nPanels expose their configurability without turning the workspace into an editor. A small grip, a plain width control, a recoverable hide action, and a restrained resize edge remain visible as part of the instrument. Color is reserved for live series, measurements, selection, sorting, and active state.\n\nMotion belongs to measured time. Graphs may move as samples advance; the rest of the interface remains still. Smooth curves stay within the values of adjacent samples, histories remain bounded, and missing telemetry is stated rather than visually fabricated.",
+    "keyCharacteristics": [
+      "Pale neutral workspace with white, thinly ruled panels.",
+      "Compact GNOME-like controls and dense, readable data rows.",
+      "Blue active and sort states; categorical color identifies telemetry.",
+      "Visible but restrained grip, hide, span, and resize affordances.",
+      "Real-time graph movement with bounded data and no decorative animation."
+    ],
+    "rules": [
+      { "name": "The Signal Color Rule", "body": "Use color to identify a series, value, selection, sort, or active state; do not spend it on empty decoration.", "section": "colors" },
+      { "name": "The Honest Absence Rule", "body": "Render unavailable numeric measurements as an em dash and unavailable subsystems with explicit text such as “Not configured” or the reported error.", "section": "colors" },
+      { "name": "The Native Voice Rule", "body": "Keep labels in sentence case and use standard uppercase only for established technical terms such as CPU, GPU, RAM, VRAM, PID, TCP, and UDP.", "section": "typography" },
+      { "name": "The Ruled Surface Rule", "body": "Use tone, separators, and spacing to establish depth; do not add cards inside panels, drop shadows, blur, or translucency.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do preserve the pale GNOME-like density, Noto Sans hierarchy, white panels, and thin gray separators.",
+      "Do keep panel grip, width, hide, and resize affordances visible, restrained, and recoverable.",
+      "Do preserve the full 24-core legend and its stable correspondence to the CPU graph layers.",
+      "Do right-align numeric table data, left-align commands and users, and expose active sorting in blue with an arrow.",
+      "Do show unavailable values explicitly with an em dash or specific status copy.",
+      "Do keep graph histories bounded and smooth interpolation within the adjacent sampled values."
+    ],
+    "donts": [
+      "Don't add decorative motion; real-time graph movement is the system's only continuous animation.",
+      "Don't add shadows, glass effects, nested decorative cards, oversized type, or spacious marketing-page rhythms.",
+      "Don't hide or simplify away the panel configurability that distinguishes Strata.",
+      "Don't replace direct triangle emission for the CPU fill with a chart library or per-frame polygon tessellation.",
+      "Don't fabricate zeroes for missing telemetry or let interpolation imply measurements that were never sampled."
+    ]
+  }
+}
