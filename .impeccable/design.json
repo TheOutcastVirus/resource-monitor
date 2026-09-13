@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-13T00:58:39Z",
+  "generatedAt": "2026-09-13T03:45:36Z",
   "title": "Design System: Strata",
   "extensions": {
     "colorMeta": {
@@ -18,6 +18,7 @@
       "control-hover": { "role": "neutral", "displayName": "Control Hover", "canonical": "#e7e7e7", "tonalRamp": ["oklch(from #e7e7e7 0.15 c h)", "oklch(from #e7e7e7 0.27 c h)", "oklch(from #e7e7e7 0.39 c h)", "oklch(from #e7e7e7 0.51 c h)", "oklch(from #e7e7e7 0.63 c h)", "oklch(from #e7e7e7 0.75 c h)", "oklch(from #e7e7e7 0.87 c h)", "oklch(from #e7e7e7 0.95 c h)"] },
       "receive": { "role": "secondary", "displayName": "Receive Blue", "canonical": "#1c71d8", "tonalRamp": ["oklch(from #1c71d8 0.15 c h)", "oklch(from #1c71d8 0.27 c h)", "oklch(from #1c71d8 0.39 c h)", "oklch(from #1c71d8 0.51 c h)", "oklch(from #1c71d8 0.63 c h)", "oklch(from #1c71d8 0.75 c h)", "oklch(from #1c71d8 0.87 c h)", "oklch(from #1c71d8 0.95 c h)"] },
       "transmit": { "role": "secondary", "displayName": "Transmit Orange", "canonical": "#c64600", "tonalRamp": ["oklch(from #c64600 0.15 c h)", "oklch(from #c64600 0.27 c h)", "oklch(from #c64600 0.39 c h)", "oklch(from #c64600 0.51 c h)", "oklch(from #c64600 0.63 c h)", "oklch(from #c64600 0.75 c h)", "oklch(from #c64600 0.87 c h)", "oklch(from #c64600 0.95 c h)"] },
+      "transmit-graph": { "role": "secondary", "displayName": "Graph Transmit Orange", "canonical": "#ff7800", "tonalRamp": ["oklch(from #ff7800 0.15 c h)", "oklch(from #ff7800 0.27 c h)", "oklch(from #ff7800 0.39 c h)", "oklch(from #ff7800 0.51 c h)", "oklch(from #ff7800 0.63 c h)", "oklch(from #ff7800 0.75 c h)", "oklch(from #ff7800 0.87 c h)", "oklch(from #ff7800 0.95 c h)"] },
       "gpu": { "role": "secondary", "displayName": "GPU Green", "canonical": "#2e7d4f", "tonalRamp": ["oklch(from #2e7d4f 0.15 c h)", "oklch(from #2e7d4f 0.27 c h)", "oklch(from #2e7d4f 0.39 c h)", "oklch(from #2e7d4f 0.51 c h)", "oklch(from #2e7d4f 0.63 c h)", "oklch(from #2e7d4f 0.75 c h)", "oklch(from #2e7d4f 0.87 c h)", "oklch(from #2e7d4f 0.95 c h)"] },
       "memory-used": { "role": "secondary", "displayName": "Memory Used Green", "canonical": "#2ec27e", "tonalRamp": ["oklch(from #2ec27e 0.15 c h)", "oklch(from #2ec27e 0.27 c h)", "oklch(from #2ec27e 0.39 c h)", "oklch(from #2ec27e 0.51 c h)", "oklch(from #2ec27e 0.63 c h)", "oklch(from #2ec27e 0.75 c h)", "oklch(from #2ec27e 0.87 c h)", "oklch(from #2ec27e 0.95 c h)"] },
       "memory-cache": { "role": "secondary", "displayName": "Memory Cache Purple", "canonical": "#9141ac", "tonalRamp": ["oklch(from #9141ac 0.15 c h)", "oklch(from #9141ac 0.27 c h)", "oklch(from #9141ac 0.39 c h)", "oklch(from #9141ac 0.51 c h)", "oklch(from #9141ac 0.63 c h)", "oklch(from #9141ac 0.75 c h)", "oklch(from #9141ac 0.87 c h)", "oklch(from #9141ac 0.95 c h)"] },
@@ -45,7 +46,44 @@
     ],
     "dataSeries": {
       "cpuCores": ["#e01b24", "#ff7800", "#f6d32d", "#33d17a", "#26a269", "#3584e4", "#1c71d8", "#9141ac", "#c061cb", "#e66100", "#2ec27e", "#62a0ea", "#a51d2d", "#c64600", "#e5a50a", "#2d7f5e", "#1a5fb4", "#613583", "#813d9c", "#ff9b5e", "#57e389", "#99c1f1", "#ed333b", "#f8e45c"],
-      "mapping": "Zero-based logical-core index. Reuse cyclically only when the machine reports more than 24 logical cores."
+      "mapping": "Zero-based logical-core index. Reuse cyclically only when the machine reports more than 24 logical cores.",
+      "temperature": {
+        "interpolation": "continuous RGB interpolation between adjacent stops; clamp outside the endpoints",
+        "stops": [
+          { "value": "30°C", "color": "#3584e4" },
+          { "value": "55°C", "color": "#2ec27e" },
+          { "value": "70°C", "color": "#e5a50a" },
+          { "value": "85°C", "color": "#ff7800" },
+          { "value": "100°C", "color": "#e01b24" }
+        ],
+        "unavailable": "#6f6b72"
+      }
+    },
+    "cpuLegend": {
+      "columnsByCoreCount": ["1–6: 1", "7–12: 2", "13–18: 3", "19+: 4"],
+      "order": "column-major",
+      "twentyFourCoreLayout": [["CPU1", "CPU2", "CPU3", "CPU4", "CPU5", "CPU6"], ["CPU7", "CPU8", "CPU9", "CPU10", "CPU11", "CPU12"], ["CPU13", "CPU14", "CPU15", "CPU16", "CPU17", "CPU18"], ["CPU19", "CPU20", "CPU21", "CPU22", "CPU23", "CPU24"]],
+      "item": "10px swatch, CPU number, flexible spacer, right-aligned percentage"
+    },
+    "networkScale": {
+      "formula": "2 ^ ceil(log2(max(1024, retained_history_rx_peak, retained_history_tx_peak) * 1.1))",
+      "minimum": "2048 B/s",
+      "labelFractions": [1.0, 0.8, 0.6, 0.4, 0.2, 0.0],
+      "labelFormat": "format each scale × fraction as a network rate",
+      "width": "64px",
+      "contract": "Plot and right-side labels use the same computed maximum from the bounded retained history."
+    },
+    "memoryMeters": {
+      "track": "12px high; 3px radius",
+      "labelWidth": "36px",
+      "valueWidth": "130px",
+      "valueAlignment": "right",
+      "panelHeight": "120px"
+    },
+    "gpuTelemetryLayout": {
+      "detailOrder": ["Device/name", "PCIe", "RX", "TX", "GPU clock", "MEM clock", "TEMP", "FAN", "POW", "ENC", "DEC"],
+      "meters": "Two side-by-side 320px blocks with 8px tracks, 36px labels, and 112px right-aligned values.",
+      "migration": "GpuDetails is a legacy deserialization variant only; normalization removes its tile and the main GPU panel owns all details."
     }
   },
   "components": [
@@ -83,16 +121,24 @@
     {
       "name": "Memory Meter",
       "kind": "custom",
-      "description": "A compact segmented meter with stable semantic order for Used, Cache, Buffers, and Free.",
-      "html": "<div class=\"ds-memory\"><span>RAM</span><div class=\"ds-memory-track\" aria-label=\"Memory allocation\"><i class=\"ds-used\"></i><i class=\"ds-cache\"></i><i class=\"ds-buffers\"></i><i class=\"ds-free\"></i></div><small>12.4 / 32 GiB</small></div>",
-      "css": ".ds-memory { display: flex; align-items: center; gap: 12px; color: #3d3846; font: 400 12px 'Noto Sans', Ubuntu, sans-serif; } .ds-memory > span { width: 36px; color: #6f6b72; } .ds-memory-track { flex: 1; height: 12px; display: flex; overflow: hidden; border-radius: 3px; background: #d9d9d9; } .ds-memory-track i { display: block; height: 100%; } .ds-used { width: 38%; background: #2ec27e; } .ds-cache { width: 22%; background: #9141ac; } .ds-buffers { width: 8%; background: #3584e4; } .ds-free { flex: 1; background: #d5d5d5; } .ds-memory small { font-size: 10px; } .ds-memory:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
+      "refersTo": "memory-meter",
+      "description": "Aligned RAM and SWAP rows share 12 px tracks, 3 px corners, and fixed 130 px right-side value columns.",
+      "html": "<div class=\"ds-memory\"><div class=\"ds-memory-row\"><span>RAM</span><div class=\"ds-memory-track\" aria-label=\"Memory allocation\"><i class=\"ds-used\"></i><i class=\"ds-cache\"></i><i class=\"ds-buffers\"></i><i class=\"ds-free\"></i></div><small>12.4 / 32 GiB</small></div><div class=\"ds-memory-key\">Used 12.4 GiB · Cache 5.1 GiB · Buffers 1.0 GiB · Free 13.5 GiB</div><div class=\"ds-memory-row\"><span>SWAP</span><div class=\"ds-memory-track\" aria-label=\"Swap allocation\"><i class=\"ds-swap\"></i></div><small>Not configured</small></div></div>",
+      "css": ".ds-memory { display: flex; flex-direction: column; gap: 4px; padding: 8px 16px; color: #3d3846; font: 400 12px 'Noto Sans', Ubuntu, sans-serif; } .ds-memory-row { display: flex; align-items: center; gap: 12px; } .ds-memory-row > span { width: 36px; flex: 0 0 36px; color: #6f6b72; } .ds-memory-row > small { width: 130px; flex: 0 0 130px; text-align: right; font-size: 10px; } .ds-memory-track { flex: 1; height: 12px; display: flex; overflow: hidden; border-radius: 3px; background: #d9d9d9; } .ds-memory-track i { display: block; height: 100%; } .ds-used { width: 38%; background: #2ec27e; } .ds-cache { width: 22%; background: #9141ac; } .ds-buffers { width: 8%; background: #3584e4; } .ds-free { flex: 1; background: #d5d5d5; } .ds-swap { width: 16%; background: #c061cb; } .ds-memory-key { padding-left: 48px; color: #6f6b72; font-size: 9px; } .ds-memory:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
     },
     {
       "name": "Ruled Telemetry Graph",
       "kind": "custom",
-      "description": "A visual reference for the GPU-rendered graph frame and full logical-core legend; production CPU fill remains direct triangle emission.",
-      "html": "<figure class=\"ds-chart\"><div class=\"ds-chart-frame\"><svg viewBox=\"0 0 300 90\" preserveAspectRatio=\"none\" aria-label=\"CPU history\"><path d=\"M0 74 C45 74 58 36 104 42 S170 68 212 30 S265 55 300 18\"/></svg></div><div class=\"ds-chart-axis\"><span>1 min</span><span>now</span></div><div class=\"ds-core-legend\"></div></figure>",
-      "css": ".ds-chart { margin: 0; color: #6f6b72; font: 400 10px 'Noto Sans', Ubuntu, sans-serif; } .ds-chart-frame { height: 90px; border: 1px solid #d9d9d9; background-color: #fff; background-image: linear-gradient(to right, rgba(216,218,221,.69) 1px, transparent 1px), linear-gradient(to bottom, #d8dadd 1px, transparent 1px); background-size: 16.666% 100%, 100% 20%; overflow: hidden; } .ds-chart svg { width: 100%; height: 100%; fill: none; stroke: #3584e4; stroke-width: 1.8; } .ds-chart-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 9px; } .ds-core-legend { margin-top: 8px; height: 24px; background: linear-gradient(90deg, #e01b24 0 4.16%, #ff7800 4.16% 8.33%, #f6d32d 8.33% 12.5%, #33d17a 12.5% 16.66%, #26a269 16.66% 20.83%, #3584e4 20.83% 25%, #1c71d8 25% 29.16%, #9141ac 29.16% 33.33%, #c061cb 33.33% 37.5%, #e66100 37.5% 41.66%, #2ec27e 41.66% 45.83%, #62a0ea 45.83% 50%, #a51d2d 50% 54.16%, #c64600 54.16% 58.33%, #e5a50a 58.33% 62.5%, #2d7f5e 62.5% 66.66%, #1a5fb4 66.66% 70.83%, #613583 70.83% 75%, #813d9c 75% 79.16%, #ff9b5e 79.16% 83.33%, #57e389 83.33% 87.5%, #99c1f1 87.5% 91.66%, #ed333b 91.66% 95.83%, #f8e45c 95.83% 100%); } .ds-chart:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
+      "description": "The low-cost GPU-rendered frame: CPU uses direct triangle emission and a column-major legend; network shares one exact power-of-two scale with its right axis.",
+      "html": "<figure class=\"ds-chart\"><div class=\"ds-chart-row\"><div class=\"ds-chart-frame\"><svg viewBox=\"0 0 300 90\" preserveAspectRatio=\"none\" aria-label=\"Network history\"><path class=\"ds-rx\" d=\"M0 74 C45 74 58 36 104 42 S170 68 212 30 S265 55 300 18\"/><path class=\"ds-tx\" d=\"M0 82 C55 68 92 78 130 55 S214 62 300 35\"/></svg></div><div class=\"ds-chart-scale\"><span>8.2 kB/s</span><span>6.6 kB/s</span><span>4.9 kB/s</span><span>3.3 kB/s</span><span>1.6 kB/s</span><span>0 B/s</span></div></div><div class=\"ds-chart-axis\"><span>1 min · auto scale</span><span>30 sec</span><span>now</span></div><div class=\"ds-network-footer\"><div><b>enp4s0</b><span><i>↓ 2.4 MB/s</i><em>↑ 320 kB/s</em></span><small>Totals ↓ 18.2 GiB ↑ 4.1 GiB</small></div><div><b>wlp3s0</b><span><i>↓ 0 B/s</i><em>↑ 0 B/s</em></span><small>Totals ↓ 2.1 GiB ↑ 611 MiB</small></div></div><div class=\"ds-core-legend\"><span><i></i>CPU1 <b>12.4%</b></span><span><i></i>CPU7 <b>28.0%</b></span><span><i></i>CPU13 <b>6.1%</b></span><span><i></i>CPU19 <b>44.2%</b></span></div></figure>",
+      "css": ".ds-chart { margin: 0; color: #6f6b72; font: 400 10px 'Noto Sans', Ubuntu, sans-serif; } .ds-chart-row { display: flex; gap: 8px; } .ds-chart-frame { flex: 1; height: 90px; border: 1px solid #d9d9d9; background-color: #fff; background-image: linear-gradient(to right, rgba(216,218,221,.69) 1px, transparent 1px), linear-gradient(to bottom, #d8dadd 1px, transparent 1px); background-size: 16.666% 100%, 100% 20%; overflow: hidden; } .ds-chart svg { width: 100%; height: 100%; fill: none; stroke-width: 1.8; } .ds-chart .ds-rx { stroke: #3584e4; } .ds-chart .ds-tx { stroke: #ff7800; } .ds-chart-scale { width: 64px; display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 9px; } .ds-chart-axis { display: flex; justify-content: space-between; padding-right: 72px; margin-top: 4px; } .ds-network-footer { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; margin-top: 8px; border-top: 1px solid #d9d9d9; } .ds-network-footer > div { flex: 1; min-width: 180px; padding: 0 8px; display: flex; flex-direction: column; gap: 4px; } .ds-network-footer > div:not(:last-child) { border-right: 1px solid #d9d9d9; } .ds-network-footer b { color: #3d3846; font-weight: 600; } .ds-network-footer span { display: flex; gap: 12px; } .ds-network-footer i { color: #1c71d8; font-style: normal; } .ds-network-footer em { color: #c64600; font-style: normal; } .ds-network-footer small { color: #6f6b72; } .ds-core-legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 20px; margin-top: 8px; } .ds-core-legend span { display: flex; align-items: center; gap: 8px; } .ds-core-legend i { width: 10px; height: 10px; background: #e01b24; } .ds-core-legend b { flex: 1; text-align: right; color: #3d3846; font-weight: 400; } .ds-chart:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
+    },
+    {
+      "name": "Integrated GPU Telemetry",
+      "kind": "custom",
+      "description": "One NVTOP-ordered GPU instrument combines identity, PCIe and traffic, clocks and thermals, side-by-side utilization meters, and history.",
+      "html": "<section class=\"ds-gpu\"><div class=\"ds-gpu-line\"><b>Device</b><span>0 [NVIDIA RTX]</span><b>PCIe</b><span>Gen 4 ×16</span><b>RX</b><span>1.2 MiB/s</span><b>TX</b><span>0.4 MiB/s</span></div><div class=\"ds-gpu-line\"><b>GPU</b><span>2100 MHz</span><b>MEM</b><span>9501 MHz</span><b>TEMP</b><span class=\"ds-temp\">67 °C</span><b>FAN</b><span>42%</span><b>POW</b><span>146 / 320 W</span><b>ENC</b><span>0%</span><b>DEC</b><span>8%</span></div><div class=\"ds-gpu-meters\"><div><b>GPU</b><i><em></em></i><span>74%</span></div><div><b>VRAM</b><i><em></em></i><span>8.2 / 24 GiB</span></div></div><div class=\"ds-gpu-graph\">GPU / VRAM history</div></section>",
+      "css": ".ds-gpu { display: flex; flex-direction: column; gap: 8px; color: #3d3846; font: 400 10px 'Noto Sans', Ubuntu, sans-serif; } .ds-gpu-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; } .ds-gpu-line b { color: #6f6b72; font-weight: 600; } .ds-gpu-line b:first-child { color: #2e7d4f; } .ds-gpu-line .ds-temp { color: #c0ab21; } .ds-gpu-meters { display: flex; gap: 20px; } .ds-gpu-meters > div { width: 320px; display: flex; align-items: center; gap: 8px; } .ds-gpu-meters b { width: 36px; color: #2e7d4f; } .ds-gpu-meters i { flex: 1; height: 8px; overflow: hidden; border-radius: 2px; background: #d9d9d9; } .ds-gpu-meters em { display: block; width: 74%; height: 100%; background: #2e7d4f; } .ds-gpu-meters span { width: 112px; text-align: right; } .ds-gpu-meters > div:last-child b { color: #7b3f94; } .ds-gpu-meters > div:last-child em { width: 34%; background: #7b3f94; } .ds-gpu-graph { min-height: 70px; display: grid; place-items: center; border: 1px solid #d9d9d9; color: #6f6b72; background-image: linear-gradient(to bottom, #d8dadd 1px, transparent 1px); background-size: 100% 20%; } .ds-gpu:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
     }
   ],
   "narrative": {
@@ -103,6 +149,7 @@
       "Compact GNOME-like controls and dense, readable data rows.",
       "Blue active and sort states; categorical color identifies telemetry.",
       "Visible but restrained grip, hide, span, and resize affordances.",
+      "Integrated GPU identity, metrics, meters, and history in one ordered instrument.",
       "Real-time graph movement with bounded data and no decorative animation."
     ],
     "rules": [
@@ -115,6 +162,10 @@
       "Do preserve the pale GNOME-like density, Noto Sans hierarchy, white panels, and thin gray separators.",
       "Do keep panel grip, width, hide, and resize affordances visible, restrained, and recoverable.",
       "Do preserve the full 24-core legend and its stable correspondence to the CPU graph layers.",
+      "Do keep the CPU legend column-major and dynamically limited to one through four equal columns.",
+      "Do derive network plot geometry and its right-side labels from one exact power-of-two scale.",
+      "Do keep GPU detail metrics integrated in the main GPU panel and normalize legacy standalone detail tiles away.",
+      "Do use the shared continuous five-stop temperature scale for CPU and GPU temperatures.",
       "Do right-align numeric table data, left-align commands and users, and expose active sorting in blue with an arrow.",
       "Do show unavailable values explicitly with an em dash or specific status copy.",
       "Do keep graph histories bounded and smooth interpolation within the adjacent sampled values."
@@ -123,6 +174,7 @@
       "Don't add decorative motion; real-time graph movement is the system's only continuous animation.",
       "Don't add shadows, glass effects, nested decorative cards, oversized type, or spacious marketing-page rhythms.",
       "Don't hide or simplify away the panel configurability that distinguishes Strata.",
+      "Don't restore a standalone GPU details panel or split its NVTOP-derived reading order across panels.",
       "Don't replace direct triangle emission for the CPU fill with a chart library or per-frame polygon tessellation.",
       "Don't fabricate zeroes for missing telemetry or let interpolation imply measurements that were never sampled."
     ]

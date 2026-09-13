@@ -16,6 +16,7 @@ colors:
   control-hover: "#e7e7e7"
   receive: "#1c71d8"
   transmit: "#c64600"
+  transmit-graph: "#ff7800"
   gpu: "#2e7d4f"
   memory-used: "#2ec27e"
   memory-cache: "#9141ac"
@@ -96,6 +97,15 @@ components:
     typography: "{typography.label}"
     height: "28px"
     padding: "0 12px"
+  memory-meter:
+    backgroundColor: "{colors.separator}"
+    rounded: "{rounded.meter}"
+    height: "12px"
+  gpu-meter:
+    backgroundColor: "{colors.separator}"
+    rounded: "{rounded.meter-sm}"
+    height: "8px"
+    width: "320px"
 ---
 
 # Design System: Strata
@@ -116,6 +126,7 @@ Motion belongs to measured time. Graphs may move as samples advance; the rest of
 - Compact GNOME-like controls and dense, readable data rows.
 - Blue active and sort states; categorical color identifies telemetry.
 - Visible but restrained grip, hide, span, and resize affordances.
+- Integrated GPU identity, metrics, meters, and history in one ordered instrument.
 - Real-time graph movement with bounded data and no decorative animation.
 
 ## Colors
@@ -129,10 +140,13 @@ The palette pairs warm-neutral Ubuntu work surfaces with a clear blue interactio
 ### Secondary
 
 - **Receive Blue** (`receive`): Network receive series and TCP/UDP process values.
-- **Transmit Orange** (`transmit`): Network transmit series and the paused-state emphasis.
+- **Transmit Orange** (`transmit`): Live network transmit values and the paused-state emphasis.
+- **Graph Transmit Orange** (`transmit-graph`): The network transmit history stroke.
 - **Telemetry Green** (`gpu`, `memory-used`): GPU utilization and used-memory signals.
 - **Telemetry Purple** (`memory-cache`, `vram`): Cache, VRAM, and related secondary telemetry.
 - **Swap Magenta** (`swap`): Swap utilization only.
+
+CPU and GPU temperature values interpolate continuously through action blue at 30 °C, telemetry green at 55 °C, yellow at 70 °C, orange at 85 °C, and red at 100 °C. Clamp values below and above the endpoints to the endpoint colors; unavailable temperature stays in secondary ink.
 
 ### Neutral
 
@@ -177,7 +191,9 @@ The complete 24-color CPU series is normative in `.impeccable/design.json`. The 
 
 The workspace uses one to three equal-weight columns with a 10 px gap and a 10 px outer inset. Each column requires roughly 480 px of usable width; the implementation collapses to one column below 984 px and cannot expose three effective columns below 1464 px. A configured span is clamped to the effective column count, so portrait layouts remain coherent without a separate mobile composition.
 
-Panels flow in user-defined order and keep individual minimum heights. CPU, GPU, and network panels default to two-column spans in landscape; every panel uses one column in portrait. The scrollable workspace appears only when readable minimum heights exceed the window. Memory and GPU detail panels have restrained fitted maxima so compact summaries do not consume surplus height.
+Panels flow in user-defined order and keep individual minimum heights. CPU, GPU, and network panels default to two-column spans in landscape; every panel uses one column in portrait. The scrollable workspace appears only when readable minimum heights exceed the window. Memory is a fixed compact 120 px panel; CPU, GPU, and network use larger minimums for their legends, details, and scales.
+
+GPU details belong inside the main GPU panel. The standalone GPU details tile is obsolete: it is absent from both default layouts and layout normalization removes it from saved legacy layouts while preserving the main GPU panel.
 
 Panel configuration remains directly visible: drag from the header grip, cycle the width control when multiple columns are configured, hide from the header and restore from Layout → Panels, and resize from the 9 px lower edge with its centered 22 px rule. Keep these affordances visually quiet and spatially stable.
 
@@ -221,15 +237,26 @@ Panels use gently rounded 8 px corners and clip their ruled contents. Compact bu
 
 - **Frame:** One-pixel separator border with six horizontal intervals and six vertical time divisions in graph-paper gray.
 - **Series:** Network, GPU, and VRAM use 1.8 px smooth strokes. CPU uses a stacked 24-color fill, normalized by core count so total height remains at or below 100%.
-- **Legend:** Show the full logical-core legend in compact wrapping rows; do not collapse it to a subset.
+- **CPU legend:** Use one equal column for up to 6 cores, two for 7–12, three for 13–18, and four for 19 or more. Fill columns top to bottom before moving right. A 24-core machine therefore shows CPU1–CPU6, CPU7–CPU12, CPU13–CPU18, and CPU19–CPU24 as four columns of six. Every item pairs a 10 px swatch with the CPU number and a right-aligned percentage.
+- **Network scale:** Show a 64 px right-side vertical scale with six right-aligned labels from the exact shared chart maximum down to zero. Compute the maximum as the next power of two above 110% of the retained-history RX/TX peak, with a 2 KiB/s floor; the plotted paths and labels must use that same value.
+- **Network footer:** Separate the interface list from the plot with a top rule. Each named interface is a flexible segment with a 180 px minimum width and a right divider between adjacent segments, followed by separate colored live receive/transmit values and a muted totals row.
 - **Motion:** Advance only with real sampled time. Use a one-poll visual delay for interpolation, freeze the clock while paused, and retain a 62-second bounded history.
 - **Rendering:** Smooth each CPU interval with clamped Catmull–Rom values and emit triangles directly. Do not introduce a chart library, per-frame polygon tessellation, unbounded history, or curve overshoot.
 
 ### Memory Meters
 
-- **RAM:** A 12 px segmented bar whose stable order and colors are Used, Cache, Buffers, and Free.
-- **Swap:** A 7 px magenta utilization bar; say “Not configured” when no swap total is present.
-- **Labels:** Keep totals adjacent and the component compact enough to remain a summary panel.
+- **Shared geometry:** RAM and SWAP tracks are both 12 px high with 3 px corners. Labels occupy 36 px on the left and values share a 130 px right-side column with right-aligned 10 px type.
+- **RAM:** A segmented track whose stable order and colors are Used, Cache, Buffers, and Free.
+- **Swap:** A magenta utilization track; say “Not configured” when no swap total is present.
+- **Spacing:** Use compact 4 px vertical gaps and 8 px top/bottom insets so the complete summary fits the fixed 120 px panel.
+
+### GPU Panel
+
+- **Reading order:** Device and name, PCIe, RX, and TX form the first compact line. GPU and MEM clocks, TEMP, FAN, POW, ENC, and DEC form the second, following the NVTOP-derived scan order.
+- **Temperature:** Apply the shared continuous temperature scale to the TEMP value; keep unavailable temperature muted.
+- **Meters:** Place GPU and VRAM meters side by side with a 20 px gap. Each block is 320 px wide, uses an 8 px track with 2 px corners, a 36 px semibold label, and a 112 px right-aligned value column.
+- **Graph:** Place the shared GPU/VRAM history graph below the two detail lines and meter row.
+- **Multi-GPU:** Keep the next-device control at the end of the first line when multiple devices are available.
 
 ### Application Chrome
 
@@ -244,6 +271,10 @@ Panels use gently rounded 8 px corners and clip their ruled contents. Compact bu
 - **Do** preserve the pale GNOME-like density, Noto Sans hierarchy, white panels, and thin gray separators.
 - **Do** keep panel grip, width, hide, and resize affordances visible, restrained, and recoverable.
 - **Do** preserve the full 24-core legend and its stable correspondence to the CPU graph layers.
+- **Do** keep the CPU legend column-major and dynamically limited to one through four equal columns.
+- **Do** derive network plot geometry and its right-side labels from one exact power-of-two scale.
+- **Do** keep GPU detail metrics integrated in the main GPU panel and normalize legacy standalone detail tiles away.
+- **Do** use the shared continuous five-stop temperature scale for CPU and GPU temperatures.
 - **Do** right-align numeric table data, left-align commands and users, and expose active sorting in blue with an arrow.
 - **Do** show unavailable values explicitly with an em dash or specific status copy.
 - **Do** keep graph histories bounded and smooth interpolation within the adjacent sampled values.
@@ -253,5 +284,6 @@ Panels use gently rounded 8 px corners and clip their ruled contents. Compact bu
 - **Don't** add decorative motion; real-time graph movement is the system's only continuous animation.
 - **Don't** add shadows, glass effects, nested decorative cards, oversized type, or spacious marketing-page rhythms.
 - **Don't** hide or simplify away the panel configurability that distinguishes Strata.
+- **Don't** restore a standalone GPU details panel or split its NVTOP-derived reading order across panels.
 - **Don't** replace direct triangle emission for the CPU fill with a chart library or per-frame polygon tessellation.
 - **Don't** fabricate zeroes for missing telemetry or let interpolation imply measurements that were never sampled.

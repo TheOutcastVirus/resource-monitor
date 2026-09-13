@@ -2,10 +2,10 @@
 
 A native Linux resource monitor built in Rust with [GPUI](https://gpui.rs/). CPU, memory, system processes, and NVIDIA GPU telemetry live together in a borderless, resizable workspace.
 
-- Stacked 60-second CPU history, 24 distinct colors, numeric per-core utilization, CPU model, and temperature.
-- RAM segments for used memory, cache, buffers, and free memory; a separate swap bar.
-- GPU and VRAM history, GPU name, graphics/memory clocks, temperature, fan, power/limit, PCIe generation/width and RX/TX, encoder/decoder utilization.
-- Network RX/TX history, aggregate totals, and per-interface rates. TCP/UDP socket counts in system process rows.
+- Stacked 60-second CPU history, 24 distinct colors, an adaptive column-major per-core legend, CPU model, and gradient-colored temperature.
+- RAM segments for used memory, cache, buffers, and free memory; an aligned swap bar in the same compact summary.
+- GPU and VRAM history with compact side-by-side meters and NVTOP-ordered device, clock, temperature, fan, power, PCIe, traffic, and encoder/decoder details above the graph.
+- Network RX/TX history with a synchronized vertical scale, aggregate totals, and segmented per-interface rates. TCP/UDP socket counts appear in system process rows.
 - Cached, virtualized system and GPU process tables. Click column headings to sort; click a row for its full command, user, state, thread count, CPU and memory details. Click a PID to copy it; the detail view also copies the complete command. Graphics/compute entries are merged by PID.
 - Always-on panel dragging, height resizing, mixed-width rows, one to three columns, panel hiding, portrait/landscape layouts, and named presets.
 - An Ubuntu-native light interface with compact controls, ruled system graphs, dense process tables, and responsive bordered panels.
@@ -56,7 +56,7 @@ Drag any panel header onto another panel to move it before that panel, anywhere 
 
 **Layout** contains portrait/landscape presets, saved workspaces, polling rates, animation rates, and font-size controls. Choose **Save preset**, type a name, and press Enter. Saving the same name replaces that preset. The `×` beside a saved preset deletes it. Every layout edit also saves the current workspace automatically to `$XDG_CONFIG_HOME/strata/settings.json` (normally `~/.config/strata/settings.json`). Invalid settings produce a visible message and fall back to defaults.
 
-The default is a single column with CPU, memory, and system processes above GPU panels. The grid reduces its effective column count when there is less than 480 logical pixels per column. Portrait presets explicitly use one column at any width. Panels remain on the same page; long workspaces and process lists scroll independently.
+The default is a single column with CPU, memory, and system processes above the GPU and GPU-process panels. The grid reduces its effective column count when there is less than 480 logical pixels per column. Portrait presets explicitly use one column at any width. Panels remain on the same page; long workspaces and process lists scroll independently.
 
 - `/` or **Filter**: type a process name, command fragment, username, or PID. Applies to both process lists. Enter finishes editing; Escape clears the filter.
 - Space or **Pause/Resume**: freeze/resume measurements and graphs without clearing their history.

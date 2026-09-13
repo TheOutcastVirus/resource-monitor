@@ -103,7 +103,18 @@ impl History {
         }));
     }
 }
-/// Timestamped, linearly interpolated paths; CPU layers are weighted by core count,
+
+pub fn network_scale(history: &History) -> f32 {
+    let peak = history
+        .samples
+        .iter()
+        .map(|sample| sample.rx.max(sample.tx))
+        .fold(1024., f32::max)
+        * 1.1;
+    2_f32.powf(peak.log2().ceil())
+}
+
+/// Timestamped, smoothly interpolated paths; CPU layers are weighted by core count,
 /// so a completely busy machine ends at 100%, rather than N × 100%.
 pub fn graph(
     history: History,
@@ -159,11 +170,7 @@ pub fn graph(
                 return;
             }
             if network {
-                let max = visible
-                    .iter()
-                    .map(|(_, s)| s.rx.max(s.tx))
-                    .fold(1024., f32::max)
-                    * 1.1;
+                let max = network_scale(&history);
                 for series in 0..2 {
                     let points: Vec<_> = visible
                         .iter()
@@ -299,7 +306,7 @@ impl Render for AnimatedChart {
 
 #[cfg(test)]
 mod tests {
-    use super::{Arc, Duration, History, Instant, Snapshot, catmull};
+    use super::{Arc, Duration, GraphSample, History, Instant, Snapshot, catmull, network_scale};
 
     #[test]
     fn smoothing_stays_within_each_sample_interval() {
@@ -352,5 +359,20 @@ mod tests {
             );
         }
         assert_eq!(h.samples.len(), 63);
+    }
+
+    #[test]
+    fn network_scale_is_stable_and_covers_the_visible_peak() {
+        let mut history = History::new();
+        history.samples.push_back(Arc::new(GraphSample {
+            at: Instant::now(),
+            cores: vec![],
+            rx: 5_000.,
+            tx: 2_000.,
+            gpus: vec![],
+        }));
+
+        assert_eq!(network_scale(&history), 8_192.);
+        assert_eq!(network_scale(&History::new()), 2_048.);
     }
 }

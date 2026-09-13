@@ -77,18 +77,87 @@ fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<
 fn muted(label: impl Into<SharedString>) -> Div {
     div().text_color(rgb(MUTED)).child(label.into())
 }
-fn stat(label: &str, value: String, color: u32) -> Div {
+fn inline_metric(label: &'static str, value: String, label_color: u32, value_color: u32) -> Div {
     div()
         .flex()
-        .flex_col()
+        .items_center()
         .gap_1()
-        .min_w(px(95.))
-        .flex_1()
-        .child(muted(SharedString::from(label.to_owned())).text_size(px(10.)))
-        .child(div().text_color(rgb(color)).text_size(px(13.)).child(value))
+        .child(
+            div()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(label_color))
+                .child(label),
+        )
+        .child(div().text_color(rgb(value_color)).child(value))
 }
 fn opt(v: Option<u32>, unit: &str) -> String {
     v.map(|v| format!("{v}{unit}")).unwrap_or("—".into())
+}
+
+fn mix_color(from: u32, to: u32, amount: f32) -> u32 {
+    let channel = |shift| {
+        let a = ((from >> shift) & 0xffu32) as f32;
+        let b = ((to >> shift) & 0xffu32) as f32;
+        (a + (b - a) * amount).round() as u32
+    };
+    (channel(16) << 16) | (channel(8) << 8) | channel(0)
+}
+
+fn temperature_color(temperature: f32) -> u32 {
+    const STOPS: [(f32, u32); 5] = [
+        (30., 0x3584e4),
+        (55., 0x2ec27e),
+        (70., 0xe5a50a),
+        (85., 0xff7800),
+        (100., 0xe01b24),
+    ];
+    if !temperature.is_finite() {
+        return MUTED;
+    }
+    for pair in STOPS.windows(2) {
+        if temperature <= pair[1].0 {
+            let amount = ((temperature - pair[0].0) / (pair[1].0 - pair[0].0)).clamp(0., 1.);
+            return mix_color(pair[0].1, pair[1].1, amount);
+        }
+    }
+    STOPS.last().unwrap().1
+}
+
+fn gpu_meter(label: &'static str, value: String, ratio: f32, color: u32) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .w(px(320.))
+        .min_w_0()
+        .gap_2()
+        .child(
+            div()
+                .w(px(36.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(color))
+                .child(label),
+        )
+        .child(
+            div()
+                .flex_1()
+                .h(px(8.))
+                .rounded(px(2.))
+                .overflow_hidden()
+                .bg(rgb(LINE))
+                .child(
+                    div()
+                        .h_full()
+                        .w(relative(ratio.clamp(0., 1.)))
+                        .bg(rgb(color)),
+                ),
+        )
+        .child(
+            div()
+                .w(px(112.))
+                .text_right()
+                .text_size(px(10.))
+                .child(value),
+        )
 }
 impl Monitor {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -471,6 +540,13 @@ impl Monitor {
     }
     fn cpu(&self) -> Div {
         let s = &self.sample;
+        let core_columns = match s.cores.len() {
+            0..=6 => 1,
+            7..=12 => 2,
+            13..=18 => 3,
+            _ => 4,
+        };
+        let rows_per_column = s.cores.len().div_ceil(core_columns);
         div()
             .flex()
             .flex_col()
@@ -496,26 +572,48 @@ impl Monitor {
                             .text_color(rgb(ACCENT))
                             .child(format!("{:.1}%", s.cpu)),
                     )
-                    .child(muted(
-                        s.temperature
-                            .map(|t| format!("{t:.0} °C"))
-                            .unwrap_or("— °C".into()),
-                    )),
+                    .child(
+                        div()
+                            .text_color(rgb(s.temperature.map(temperature_color).unwrap_or(MUTED)))
+                            .child(
+                                s.temperature
+                                    .map(|t| format!("{t:.0} °C"))
+                                    .unwrap_or("— °C".into()),
+                            ),
+                    ),
             )
             .child(self.chart(None))
-            .child(div().flex().flex_wrap().gap_x_1().gap_y_1().children(
-                s.cores.iter().enumerate().map(|(i, v)| {
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .w(px(66.))
-                        .text_size(px(10.))
-                        .child(div().size(px(8.)).bg(rgb(COLORS[i % COLORS.len()])))
-                        .child(muted(format!("{:02}", i)))
-                        .child(div().flex_1().text_right().child(format!("{v:4.1}%")))
-                }),
-            ))
+            .child(
+                div()
+                    .flex()
+                    .w_full()
+                    .gap_5()
+                    .children((0..core_columns).map(|column| {
+                        let start = column * rows_per_column;
+                        let end = (start + rows_per_column).min(s.cores.len());
+                        div().flex().flex_col().flex_1().min_w_0().gap_1().children(
+                            (start..end).map(|i| {
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .text_size(px(10.))
+                                    .child(
+                                        div()
+                                            .size(px(10.))
+                                            .mr_2()
+                                            .bg(rgb(COLORS[i % COLORS.len()])),
+                                    )
+                                    .child(muted(format!("CPU{}", i + 1)))
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .text_right()
+                                            .child(format!("{:.1}%", s.cores[i])),
+                                    )
+                            }),
+                        )
+                    })),
+            )
     }
     fn chart(&self, gpu: Option<String>) -> Div {
         div()
@@ -599,12 +697,12 @@ impl Monitor {
         };
         div()
             .px_4()
-            .pb_3()
+            .pb_2()
             .flex()
             .flex_col()
             .flex_1()
             .pt_2()
-            .gap_2()
+            .gap_1()
             .child(
                 div()
                     .flex()
@@ -623,11 +721,17 @@ impl Monitor {
                                 div().h_full().w(relative(ratio(*v))).bg(rgb(*c))
                             })),
                     )
-                    .child(div().text_size(px(10.)).child(format!(
-                        "{} / {}",
-                        metrics::bytes(s.memory_active),
-                        metrics::bytes(total)
-                    ))),
+                    .child(
+                        div()
+                            .w(px(130.))
+                            .text_right()
+                            .text_size(px(10.))
+                            .child(format!(
+                                "{} / {}",
+                                metrics::bytes(s.memory_active),
+                                metrics::bytes(total)
+                            )),
+                    ),
             )
             .child(
                 div()
@@ -654,8 +758,8 @@ impl Monitor {
                     .child(
                         div()
                             .flex_1()
-                            .h(px(7.))
-                            .rounded(px(2.))
+                            .h(px(12.))
+                            .rounded(px(3.))
                             .bg(rgb(LINE))
                             .overflow_hidden()
                             .child(
@@ -665,20 +769,28 @@ impl Monitor {
                                     .bg(rgb(0xc061cb)),
                             ),
                     )
-                    .child(div().text_size(px(10.)).child(if s.swap_total == 0 {
-                        "Not configured".into()
-                    } else {
-                        format!(
-                            "{} / {}",
-                            metrics::bytes(s.swap_used),
-                            metrics::bytes(s.swap_total)
-                        )
-                    })),
+                    .child(div().w(px(130.)).text_right().text_size(px(10.)).child(
+                        if s.swap_total == 0 {
+                            "Not configured".into()
+                        } else {
+                            format!(
+                                "{} / {}",
+                                metrics::bytes(s.swap_used),
+                                metrics::bytes(s.swap_total)
+                            )
+                        },
+                    )),
             )
     }
     fn gpu(&self, cx: &mut Context<Self>) -> Div {
         let Some(g) = self.sample.gpus.get(self.gpu_index) else {
             return self.no_gpu();
+        };
+        let gpu_ratio = g.utilization.unwrap_or(0) as f32 / 100.;
+        let vram_ratio = if g.memory_total > 0 {
+            g.memory_used as f32 / g.memory_total as f32
+        } else {
+            0.
         };
         div()
             .flex()
@@ -687,19 +799,93 @@ impl Monitor {
             .px_4()
             .pb_3()
             .gap_2()
+            .child(self.gpu_details(cx))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_5()
+                    .child(gpu_meter(
+                        "GPU",
+                        opt(g.utilization, "%"),
+                        gpu_ratio,
+                        0x2e7d4f,
+                    ))
+                    .child(gpu_meter(
+                        "VRAM",
+                        format!(
+                            "{} / {}",
+                            metrics::bytes(g.memory_used),
+                            metrics::bytes(g.memory_total)
+                        ),
+                        vram_ratio,
+                        0x7b3f94,
+                    )),
+            )
+            .child(self.chart(Some(g.uuid.clone())))
+    }
+    fn no_gpu(&self) -> Div {
+        div().p_3().text_color(rgb(MUTED)).child(
+            self.sample
+                .gpu_error
+                .clone()
+                .unwrap_or("Waiting for a supported NVIDIA GPU…".into()),
+        )
+    }
+    fn gpu_details(&self, cx: &mut Context<Self>) -> Div {
+        let Some(g) = self.sample.gpus.get(self.gpu_index) else {
+            return self.no_gpu();
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .pt_1()
+            .text_size(px(10.))
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .gap_2()
-                    .child(div().flex_1().child(g.name.clone()))
-                    .when(self.sample.gpus.len() > 1, |s| {
-                        s.child(
+                    .gap_x_3()
+                    .gap_y_1()
+                    .child(inline_metric(
+                        "Device",
+                        format!("{}  [{}]", self.gpu_index, g.name),
+                        0x2e7d4f,
+                        TEXT,
+                    ))
+                    .child(inline_metric(
+                        "PCIe",
+                        format!("Gen {} ×{}", opt(g.generation, ""), opt(g.width, "")),
+                        MUTED,
+                        TEXT,
+                    ))
+                    .child(inline_metric(
+                        "RX",
+                        g.rx.map(|value| format!("{:.1} MiB/s", value as f32 / 1024.))
+                            .unwrap_or("—".into()),
+                        MUTED,
+                        TEXT,
+                    ))
+                    .child(inline_metric(
+                        "TX",
+                        g.tx.map(|value| format!("{:.1} MiB/s", value as f32 / 1024.))
+                            .unwrap_or("—".into()),
+                        MUTED,
+                        TEXT,
+                    ))
+                    .child(div().flex_1())
+                    .when(self.sample.gpus.len() > 1, |row| {
+                        row.child(
                             button(
                                 "next-gpu",
-                                SharedString::from(format!("GPU {} ▸", self.gpu_index)),
+                                SharedString::from(format!(
+                                    "Show GPU {}",
+                                    (self.gpu_index + 1) % self.sample.gpus.len()
+                                )),
                             )
+                            .text_size(px(10.))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.gpu_index = (this.gpu_index + 1) % this.sample.gpus.len();
                                 this.reindex();
@@ -712,101 +898,46 @@ impl Monitor {
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap_4()
-                    .text_size(px(11.))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(0x2e7d4f))
-                            .child(format!("GPU  {}", opt(g.utilization, "%"))),
-                    )
-                    .child(div().text_color(rgb(0x7b3f94)).child(format!(
-                        "VRAM  {} / {}",
-                        metrics::bytes(g.memory_used),
-                        metrics::bytes(g.memory_total)
-                    ))),
-            )
-            .child(self.chart(Some(g.uuid.clone())))
-    }
-    fn no_gpu(&self) -> Div {
-        div().p_3().text_color(rgb(MUTED)).child(
-            self.sample
-                .gpu_error
-                .clone()
-                .unwrap_or("Waiting for a supported NVIDIA GPU…".into()),
-        )
-    }
-    fn gpu_details(&self) -> Div {
-        let Some(g) = self.sample.gpus.get(self.gpu_index) else {
-            return self.no_gpu();
-        };
-        div()
-            .px_4()
-            .pb_3()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .justify_center()
-            .gap_3()
-            .child(
-                div().flex().gap_2().children(
-                    [
-                        ("GPU clock · MHz", opt(g.clock, "")),
-                        ("Memory · MHz", opt(g.memory_clock, "")),
-                        ("Temperature", opt(g.temperature, " °C")),
-                        ("Fan", opt(g.fan, "%")),
-                    ]
-                    .into_iter()
-                    .map(|(l, v)| {
-                        stat(
-                            l,
-                            v,
-                            if l == "Temperature" && g.temperature.unwrap_or(0) > 85 {
-                                0xdf947d
-                            } else {
-                                TEXT
-                            },
-                        )
-                    }),
-                ),
-            )
-            .child(
-                div().flex().gap_2().children(
-                    [
-                        (
-                            "Power",
-                            format!(
-                                "{} / {} W",
-                                g.power
-                                    .map(|p| (p / 1000).to_string())
-                                    .unwrap_or("—".into()),
-                                g.power_limit
-                                    .map(|p| (p / 1000).to_string())
-                                    .unwrap_or("—".into())
-                            ),
+                    .items_center()
+                    .gap_x_3()
+                    .gap_y_1()
+                    .child(inline_metric(
+                        "GPU",
+                        format!("{} MHz", opt(g.clock, "")),
+                        0x2e7d4f,
+                        TEXT,
+                    ))
+                    .child(inline_metric(
+                        "MEM",
+                        format!("{} MHz", opt(g.memory_clock, "")),
+                        0x7b3f94,
+                        TEXT,
+                    ))
+                    .child(inline_metric(
+                        "TEMP",
+                        opt(g.temperature, " °C"),
+                        MUTED,
+                        g.temperature
+                            .map(|temperature| temperature_color(temperature as f32))
+                            .unwrap_or(MUTED),
+                    ))
+                    .child(inline_metric("FAN", opt(g.fan, "%"), MUTED, TEXT))
+                    .child(inline_metric(
+                        "POW",
+                        format!(
+                            "{} / {} W",
+                            g.power
+                                .map(|power| (power / 1000).to_string())
+                                .unwrap_or("—".into()),
+                            g.power_limit
+                                .map(|power| (power / 1000).to_string())
+                                .unwrap_or("—".into())
                         ),
-                        (
-                            "PCIe",
-                            format!("Gen {} ×{}", opt(g.generation, ""), opt(g.width, "")),
-                        ),
-                        (
-                            "RX / TX · MiB/s",
-                            format!(
-                                "{} / {}",
-                                g.rx.map(|v| format!("{:.1}", v as f32 / 1024.))
-                                    .unwrap_or("—".into()),
-                                g.tx.map(|v| format!("{:.1}", v as f32 / 1024.))
-                                    .unwrap_or("—".into())
-                            ),
-                        ),
-                        (
-                            "Encoder / decoder",
-                            format!("{} / {}", opt(g.encoder, "%"), opt(g.decoder, "%")),
-                        ),
-                    ]
-                    .into_iter()
-                    .map(|(l, v)| stat(l, v, TEXT)),
-                ),
+                        MUTED,
+                        TEXT,
+                    ))
+                    .child(inline_metric("ENC", opt(g.encoder, "%"), MUTED, TEXT))
+                    .child(inline_metric("DEC", opt(g.decoder, "%"), MUTED, TEXT)),
             )
     }
     fn processes(&self, gpu: bool, _: &mut Context<Self>) -> Div {
@@ -823,6 +954,8 @@ impl Monitor {
     }
     fn network(&self) -> Div {
         let n = &self.sample.network;
+        let scale = chart::network_scale(&self.history);
+        let interface_count = n.interfaces.len();
         div()
             .px_4()
             .pb_3()
@@ -857,35 +990,90 @@ impl Monitor {
             )
             .child(
                 div()
+                    .flex()
                     .flex_1()
                     .min_h(px(40.))
-                    .overflow_hidden()
-                    .child(self.network_chart.clone()),
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .h_full()
+                            .overflow_hidden()
+                            .border_1()
+                            .border_color(rgb(LINE))
+                            .child(self.network_chart.clone()),
+                    )
+                    .child(
+                        div()
+                            .w(px(64.))
+                            .h_full()
+                            .flex()
+                            .flex_col()
+                            .justify_between()
+                            .text_right()
+                            .text_size(px(9.))
+                            .text_color(rgb(MUTED))
+                            .children(
+                                [1., 0.8, 0.6, 0.4, 0.2, 0.]
+                                    .into_iter()
+                                    .map(|fraction| crate::network::rate(scale * fraction)),
+                            ),
+                    ),
             )
             .child(
                 div()
                     .flex()
                     .justify_between()
+                    .pr(px(72.))
                     .text_size(px(10.))
                     .text_color(rgb(MUTED))
-                    .child("60s · auto scale")
+                    .child("1 min · auto scale")
+                    .child("30 sec")
                     .child("now"),
             )
             .child(
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap_3()
+                    .gap_2()
+                    .pt_2()
+                    .border_t_1()
+                    .border_color(rgb(LINE))
                     .text_size(px(10.))
-                    .children(n.interfaces.iter().map(|i| {
-                        muted(format!(
-                            "{} ↓ {} ↑ {} · {} / {} total",
-                            i.name,
-                            crate::network::rate(i.rx_rate),
-                            crate::network::rate(i.tx_rate),
-                            metrics::bytes(i.rx),
-                            metrics::bytes(i.tx)
-                        ))
+                    .children(n.interfaces.iter().enumerate().map(|(index, interface)| {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w(px(180.))
+                            .gap_1()
+                            .px_2()
+                            .when(index + 1 < interface_count, |d| {
+                                d.border_r_1().border_color(rgb(LINE))
+                            })
+                            .child(
+                                div()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(interface.name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_3()
+                                    .child(div().text_color(rgb(0x1c71d8)).child(format!(
+                                        "↓ {}",
+                                        crate::network::rate(interface.rx_rate)
+                                    )))
+                                    .child(div().text_color(rgb(0xc64600)).child(format!(
+                                        "↑ {}",
+                                        crate::network::rate(interface.tx_rate)
+                                    ))),
+                            )
+                            .child(muted(format!(
+                                "Totals  ↓ {}   ↑ {}",
+                                metrics::bytes(interface.rx),
+                                metrics::bytes(interface.tx)
+                            )))
                     })),
             )
     }
@@ -911,7 +1099,7 @@ impl Monitor {
             Panel::Network => self.network(),
             Panel::Processes => self.processes(false, cx),
             Panel::Gpu => self.gpu(cx),
-            Panel::GpuDetails => self.gpu_details(),
+            Panel::GpuDetails => self.gpu_details(cx),
             Panel::GpuProcesses => self.processes(true, cx),
         };
         div()

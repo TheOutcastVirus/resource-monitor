@@ -12,13 +12,12 @@ pub enum Panel {
     GpuProcesses,
 }
 impl Panel {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 6] = [
         Self::Cpu,
         Self::Memory,
         Self::Processes,
         Self::Network,
         Self::Gpu,
-        Self::GpuDetails,
         Self::GpuProcesses,
     ];
     pub fn title(self) -> &'static str {
@@ -34,21 +33,21 @@ impl Panel {
     }
     pub fn min_height(self) -> f32 {
         match self {
-            Self::Cpu => 230.,
-            Self::Memory => 140.,
-            Self::Gpu => 200.,
+            Self::Cpu => 280.,
+            Self::Memory => 120.,
+            Self::Gpu => 360.,
             Self::GpuDetails => 170.,
-            Self::Network => 220.,
+            Self::Network => 250.,
             _ => 140.,
         }
     }
     pub fn height(self) -> f32 {
         match self {
-            Self::Cpu => 300.,
-            Self::Memory => 140.,
+            Self::Cpu => 340.,
+            Self::Memory => 120.,
             Self::Processes => 300.,
-            Self::Gpu => 260.,
-            Self::Network => 220.,
+            Self::Gpu => 400.,
+            Self::Network => 280.,
             Self::GpuDetails => 170.,
             Self::GpuProcesses => 300.,
         }
@@ -94,10 +93,7 @@ impl Layout {
                     } else {
                         1
                     },
-                    lane: usize::from(matches!(
-                        p,
-                        Panel::Gpu | Panel::GpuDetails | Panel::GpuProcesses
-                    )),
+                    lane: usize::from(matches!(p, Panel::Gpu | Panel::GpuProcesses)),
                     visible: true,
                 })
                 .collect(),
@@ -117,7 +113,6 @@ impl Layout {
             Panel::Processes,
             Panel::Network,
             Panel::Gpu,
-            Panel::GpuDetails,
             Panel::GpuProcesses,
         ]
         .into_iter()
@@ -160,7 +155,7 @@ impl Layout {
         let rows = self.rows(columns);
         let mut pending: Vec<usize> = (0..rows.len()).collect();
         let mut out = vec![0.; rows.len()];
-        let mut remaining = (available - 12. * rows.len().saturating_sub(1) as f32).max(0.);
+        let mut remaining = (available - 10. * rows.len().saturating_sub(1) as f32).max(0.);
         let weights: Vec<f32> = rows
             .iter()
             .map(|r| r.iter().map(|t| t.height).fold(0., f32::max))
@@ -178,7 +173,7 @@ impl Layout {
                 let max = rows[i]
                     .iter()
                     .map(|t| match t.panel {
-                        Panel::Memory => 180.,
+                        Panel::Memory => 120.,
                         Panel::GpuDetails => 220.,
                         _ => f32::MAX,
                     })
@@ -217,7 +212,7 @@ impl Layout {
         self.fps = self.fps.clamp(1, 60);
         let mut seen = vec![];
         self.tiles.retain(|t| {
-            if seen.contains(&t.panel) {
+            if t.panel == Panel::GpuDetails || seen.contains(&t.panel) {
                 false
             } else {
                 seen.push(t.panel);
@@ -323,7 +318,7 @@ mod tests {
         for row in rows {
             assert!(row.iter().map(|t| t.span.min(2)).sum::<usize>() <= 2);
         }
-        assert_eq!(l.rows(1).len(), 7);
+        assert_eq!(l.rows(1).len(), 6);
     }
     #[test]
     fn default_is_cpu_first_and_panels_fill_a_tall_window() {
@@ -333,7 +328,7 @@ mod tests {
         assert_eq!(l.tiles[3].panel, Panel::Network);
         assert_eq!(l.tiles[4].panel, Panel::Gpu);
         let sizes = l.fitted_heights(1, 1800.);
-        assert!((sizes.iter().map(|(_, h)| h).sum::<f32>() + 72. - 1800.).abs() < 0.1);
+        assert!((sizes.iter().map(|(_, h)| h).sum::<f32>() + 50. - 1800.).abs() < 0.1);
         for (p, h) in l.fitted_heights(1, 500.) {
             assert!(h >= p.min_height());
         }
@@ -347,7 +342,7 @@ mod tests {
             l.tiles.iter().find(|t| t.panel == Panel::Cpu).unwrap().lane,
             1
         );
-        assert_eq!(l.tiles.len(), 7);
+        assert_eq!(l.tiles.len(), 6);
     }
     #[test]
     fn presets_round_trip_and_normalize() {
@@ -358,7 +353,29 @@ mod tests {
         s.layout.tiles.push(s.layout.tiles[0].clone());
         s.layout.poll_ms = 0;
         s.layout.normalize();
-        assert_eq!(s.layout.tiles.len(), 7);
+        assert_eq!(s.layout.tiles.len(), 6);
         assert_eq!(s.layout.poll_ms, 250);
+    }
+
+    #[test]
+    fn legacy_gpu_details_panel_is_folded_into_gpu_panel() {
+        let mut layout = Layout::portrait();
+        layout.tiles.push(Tile {
+            panel: Panel::GpuDetails,
+            height: Panel::GpuDetails.height(),
+            span: 1,
+            lane: 0,
+            visible: true,
+        });
+
+        layout.normalize();
+
+        assert!(layout.tiles.iter().any(|tile| tile.panel == Panel::Gpu));
+        assert!(
+            layout
+                .tiles
+                .iter()
+                .all(|tile| tile.panel != Panel::GpuDetails)
+        );
     }
 }
