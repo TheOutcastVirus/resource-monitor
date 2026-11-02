@@ -17,4 +17,4 @@ p = pathlib.Path(sys.argv[2]); p.parent.mkdir(parents=True, exist_ok=True); p.wr
 PY
 if command -v update-desktop-database >/dev/null; then update-desktop-database "$data_dir/applications"; fi
 if command -v gtk-update-icon-cache >/dev/null; then gtk-update-icon-cache -f -t "$data_dir/icons/hicolor" >/dev/null 2>&1 || true; fi
-printf 'Installed Strata. Launch it from your application menu or %s/strata\n' "$bin_dir"
+printf 'Installed Resource Monitor. Launch it from your application menu or %s/strata\n' "$bin_dir"

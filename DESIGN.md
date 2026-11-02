@@ -127,7 +127,7 @@ Motion belongs to measured time. Graphs may move as samples advance; the rest of
 - Blue active and sort states; categorical color identifies telemetry.
 - Visible but restrained grip, hide, span, and resize affordances.
 - Integrated GPU identity, metrics, meters, and history in one ordered instrument.
-- Real-time graph movement with bounded data, fixed-size triangle batches, and no decorative animation.
+- Real-time graph movement with bounded data and no decorative animation.
 
 ## Colors
 
@@ -236,16 +236,15 @@ Panels use gently rounded 8 px corners and clip their ruled contents. Compact bu
 ### Ruled Telemetry Graphs
 
 - **Frame:** One-pixel separator border with six horizontal intervals and six vertical time divisions in graph-paper gray.
-- **Series:** Network, GPU, and VRAM use visually smooth 1.8 px strokes. CPU uses a stacked 24-color fill, normalized by core count so total height remains at or below 100%.
+- **Series:** Network, GPU, and VRAM use 1.8 px anti-aliased Bézier strokes. CPU uses a stacked 24-color fill, normalized by core count so total height remains at or below 100%.
 - **CPU legend:** Use one equal column for up to 6 cores, two for 7–12, three for 13–18, and four for 19 or more. Fill columns top to bottom before moving right. A 24-core machine therefore shows CPU1–CPU6, CPU7–CPU12, CPU13–CPU18, and CPU19–CPU24 as four columns of six. Every item pairs a 10 px swatch with the CPU number and a right-aligned percentage.
-- **Network scale:** Show a 64 px right-side vertical scale with six right-aligned labels from the exact shared chart maximum down to zero. Compute the maximum as the next power of two above 110% of the retained-history RX/TX peak, with a 2 KiB/s floor; the plotted paths and labels must use that same value.
+- **Network scale:** Show a 64 px right-side vertical scale with six right-aligned labels from the exact shared chart maximum down to zero. Compute the maximum by rounding 105% of the retained-history RX/TX peak up to the next 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, or 10 step in the displayed KiB/s or MiB/s unit, with a 2 KiB/s floor, so a saturated link sits just under the top instead of doubling the axis; the plotted paths and labels must use that same value.
 - **Network footer:** Separate the interface list from the plot with a top rule. Each named interface is a flexible segment with a 180 px minimum width and a right divider between adjacent segments, followed by separate colored live receive/transmit values and a muted totals row.
 - **Motion:** Advance only with real sampled time. Use a one-poll visual delay for interpolation, freeze the clock while paused, and retain the existing 15, 30, and 60 fps choices.
 - **History bounds:** Retain at most 62 seconds and 249 samples. The hard sample cap covers the minimum 250 ms polling interval and prevents faster or irregular producers from growing the rendering batch.
-- **Geometry:** Subdivide every sampled interval into four bounded Catmull–Rom steps. Emit network, GPU, VRAM, and CPU geometry as direct fixed-size triangle batches; each thick line segment and each CPU quad uses two triangles.
-- **Stable allocation:** Pad line batches to their polling-derived final interval count with degenerate triangles. For CPU, paint one transparent bounded primer whose triangle count completes the final maximum batch from the first usable frame, so the renderer reuses its upload allocation while history fills.
-- **Missing GPU samples:** Insert degenerate padding for missing utilization, memory, or device samples. Never draw a bridge across a gap.
-- **Linux renderer:** Default `ZED_PATH_SAMPLE_COUNT` to `1` before GPUI initializes. An explicitly supplied value still wins for diagnostics. Single-sample paths preserve the smooth animation while preventing persistent NVIDIA driver-side multisample allocation growth.
+- **Geometry:** Draw network, GPU, and VRAM lines as clamped cubic Bézier strokes. Subdivide every CPU interval into four bounded Catmull–Rom steps and emit its quads as direct triangles.
+- **Stable allocation:** For CPU, paint one transparent bounded primer whose triangle count completes the final maximum batch from the first usable frame, so the renderer reuses its upload allocation while history fills.
+- **Missing GPU samples:** Split the line at missing utilization, memory, or device samples. Never draw a bridge across a gap.
 
 ### Memory Meters
 
@@ -264,7 +263,7 @@ Panels use gently rounded 8 px corners and clip their ruled contents. Compact bu
 
 ### Application Chrome
 
-- **Title bar:** 42 px instrument-white row with Strata at the left, a draggable center, compact Pause, Filter, and Layout controls, and authored minimize, maximize, and close icons.
+- **Title bar:** 42 px instrument-white row with Resource Monitor at the left, a draggable center, compact Pause, Filter, and Layout controls, and authored minimize, maximize, and close icons.
 - **Status bar:** 28 px instrument-white row with update or pause status and a restrained bottom-right resize icon.
 - **Icons:** Use the single 16-unit, 1.15 px stroke family from the implementation; do not substitute emoji, text glyphs, or a mixed icon library.
 - **Window material:** Declare the native window opaque because the root workspace paints every pixel with an opaque surface.
@@ -277,14 +276,13 @@ Panels use gently rounded 8 px corners and clip their ruled contents. Compact bu
 - **Do** keep panel grip, width, hide, and resize affordances visible, restrained, and recoverable.
 - **Do** preserve the full 24-core legend and its stable correspondence to the CPU graph layers.
 - **Do** keep the CPU legend column-major and dynamically limited to one through four equal columns.
-- **Do** derive network plot geometry and its right-side labels from one exact power-of-two scale.
+- **Do** derive network plot geometry and its right-side labels from one exact rounded scale.
 - **Do** keep GPU detail metrics integrated in the main GPU panel and normalize legacy standalone detail tiles away.
 - **Do** use the shared continuous five-stop temperature scale for CPU and GPU temperatures.
 - **Do** right-align numeric table data, left-align commands and users, and expose active sorting in blue with an arrow.
 - **Do** show unavailable values explicitly with an em dash or specific status copy.
 - **Do** keep graph histories bounded to both 62 seconds and 249 samples, and keep smooth interpolation within adjacent sampled values.
-- **Do** preserve fixed-size direct triangle batches, degenerate gap padding, and the transparent CPU allocation primer.
-- **Do** retain the Linux single-sample path default while honoring an explicit diagnostic override.
+- **Do** preserve direct CPU triangle emission and the transparent CPU allocation primer.
 
 ### Don't:
 
@@ -292,6 +290,6 @@ Panels use gently rounded 8 px corners and clip their ruled contents. Compact bu
 - **Don't** add shadows, glass effects, nested decorative cards, oversized type, or spacious marketing-page rhythms.
 - **Don't** hide or simplify away the panel configurability that distinguishes Strata.
 - **Don't** restore a standalone GPU details panel or split its NVTOP-derived reading order across panels.
-- **Don't** replace direct triangle emission with a chart library, per-frame polygon tessellation, or variably growing path batches.
+- **Don't** replace direct CPU triangle emission with a chart library or per-frame polygon tessellation.
 - **Don't** bridge missing GPU samples or remove the CPU primer that stabilizes the final upload allocation.
 - **Don't** fabricate zeroes for missing telemetry or let interpolation imply measurements that were never sampled.

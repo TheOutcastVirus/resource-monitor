@@ -40,7 +40,7 @@ cargo run --release --locked -- --check   # Live sampler diagnostic, no window
 ./scripts/install.sh
 ```
 
-Installs the optimized binary to `~/.local/bin/strata`, the desktop entry to `~/.local/share/applications`, and the SVG icon to the user's icon theme. Launch **Strata** from the application menu. The desktop entry uses an absolute executable path, so the launcher does not depend on your shell's PATH. Supports `STRATA_PREFIX` for the binary prefix and the standard XDG data/config directories.
+Installs the optimized binary to `~/.local/bin/strata`, the desktop entry to `~/.local/share/applications`, and the SVG icon to the user's icon theme. Launch **Resource Monitor** from the application menu. The desktop entry uses an absolute executable path, so the launcher does not depend on your shell's PATH. Supports `STRATA_PREFIX` for the binary prefix and the standard XDG data/config directories.
 
 ```sh
 ./scripts/package.sh                    # Portable archive for compatible Linux systems
@@ -78,7 +78,7 @@ Network totals sum non-loopback interfaces. Virtual bridges and physical interfa
 
 `src/metrics.rs` owns the sampler thread and Linux/NVML adapters. It publishes the latest snapshot through a single-slot mailbox; the UI never waits for sampling and no subprocess is launched for a poll. `/proc` CPU deltas exclude guest double-counting and account for PID reuse. NVIDIA is loaded dynamically through `nvml-wrapper`.
 
-`src/chart.rs` keeps only compact graph samples in a bounded history. Charts share one animation clock at 30 fps by default (15/30/60 selectable), maintaining the selected rate when unfocused. Offscreen chart painting is skipped. Network, GPU, VRAM, and CPU curves use bounded Catmull–Rom subdivisions with fixed-size direct triangle batches, avoiding per-frame polygon tessellation, visual overshoot, and progressively larger GPU upload allocations while history fills. On Linux, Strata defaults GPUI path rasterization to one sample to avoid persistent driver-side MSAA allocations; an explicit `ZED_PATH_SAMPLE_COUNT` environment value remains available for driver diagnostics. Process rows are virtualized with GPUI's `uniform_list`, inside cached views that avoid rebuilding unrelated tables for chart animation. Release builds use thin LTO and stripped symbols.
+`src/chart.rs` keeps only compact graph samples in a bounded history. Charts share one animation clock at 30 fps by default (15/30/60 selectable), maintaining the selected rate when unfocused. Offscreen chart painting is skipped. Network and GPU lines use bounded, anti-aliased Bézier curves; CPU layers use bounded Catmull–Rom subdivisions while still emitting triangles directly, avoiding per-frame polygon tessellation and visual overshoot. Process rows are virtualized with GPUI's `uniform_list`, inside cached views that avoid rebuilding unrelated tables for chart animation. Release builds use thin LTO and stripped symbols.
 
 `src/layout.rs` owns validated, serializable workspace state and atomic file replacement. `src/ui.rs` renders the panels and interactions. `src/theme.rs` owns shared colors and the vector icon family; `DESIGN.md` records the visual conventions. To add AMD support, supply the same normalized `Gpu`/`Process` readings through a separate driver adapter; the charts and panels are vendor-independent. NVIDIA is the only implemented GPU sampler in this version.
 

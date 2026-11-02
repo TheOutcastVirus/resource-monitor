@@ -22,10 +22,6 @@ fn catmull(values: &[f32], segment: usize, t: f32) -> f32 {
     let p1 = values[segment];
     let p2 = values[segment + 1];
     let p3 = values[(segment + 2).min(values.len() - 1)];
-    catmull_segment(p0, p1, p2, p3, t)
-}
-
-fn catmull_segment(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let t2 = t * t;
     let t3 = t2 * t;
     let value = 0.5
@@ -62,68 +58,29 @@ fn push_degenerate_triangles(path: &mut Path<Pixels>, at: Point<Pixels>, count: 
     }
 }
 
-fn push_line_segment(
-    path: &mut Path<Pixels>,
-    origin: Point<Pixels>,
-    from: (f32, f32),
-    to: (f32, f32),
-    width: f32,
-) {
-    let dx = to.0 - from.0;
-    let dy = to.1 - from.1;
-    let length = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
-    let ox = -dy / length * width / 2.;
-    let oy = dx / length * width / 2.;
-    let at = |(x, y): (f32, f32)| point(origin.x + px(x), origin.y + px(y));
-    let a = at((from.0 + ox, from.1 + oy));
-    let b = at((to.0 + ox, to.1 + oy));
-    let c = at((to.0 - ox, to.1 - oy));
-    let d = at((from.0 - ox, from.1 - oy));
-    push_solid_quad(path, a, b, c, d);
-}
-
-fn smooth_stroke(
-    points: &[Option<(f32, f32)>],
-    origin: Point<Pixels>,
-    width: f32,
-    max_intervals: usize,
-) -> Option<Path<Pixels>> {
-    if points.len() < 2 {
-        return None;
-    }
-    let mut path = Path::new(origin);
-    let mut has_line = false;
+fn smooth_stroke(points: &[(f32, f32)], origin: Point<Pixels>, width: f32) -> Option<Path<Pixels>> {
+    let first = *points.first()?;
+    let absolute = |(x, y): (f32, f32)| point(origin.x + px(x), origin.y + px(y));
+    let mut path = PathBuilder::stroke(px(width));
+    path.move_to(absolute(first));
     for i in 0..points.len() - 1 {
-        let (Some(p1), Some(p2)) = (points[i], points[i + 1]) else {
-            push_degenerate_triangles(&mut path, origin, CURVE_STEPS * 2);
-            continue;
-        };
-        let p0 = points[i.saturating_sub(1)].unwrap_or(p1);
-        let p3 = points[(i + 2).min(points.len() - 1)].unwrap_or(p2);
-        for step in 0..CURVE_STEPS {
-            let t0 = step as f32 / CURVE_STEPS as f32;
-            let t1 = (step + 1) as f32 / CURVE_STEPS as f32;
-            let from = (
-                p1.0 + (p2.0 - p1.0) * t0,
-                catmull_segment(p0.1, p1.1, p2.1, p3.1, t0),
-            );
-            let to = (
-                p1.0 + (p2.0 - p1.0) * t1,
-                catmull_segment(p0.1, p1.1, p2.1, p3.1, t1),
-            );
-            push_line_segment(&mut path, origin, from, to, width);
-        }
-        has_line = true;
+        let p0 = points[i.saturating_sub(1)];
+        let p1 = points[i];
+        let p2 = points[i + 1];
+        let p3 = points[(i + 2).min(points.len() - 1)];
+        let y_min = p1.1.min(p2.1);
+        let y_max = p1.1.max(p2.1);
+        let control_a = (
+            p1.0 + (p2.0 - p0.0) / 6.,
+            (p1.1 + (p2.1 - p0.1) / 6.).clamp(y_min, y_max),
+        );
+        let control_b = (
+            p2.0 - (p3.0 - p1.0) / 6.,
+            (p2.1 - (p3.1 - p1.1) / 6.).clamp(y_min, y_max),
+        );
+        path.cubic_bezier_to(absolute(p2), absolute(control_a), absolute(control_b));
     }
-    if !has_line {
-        return None;
-    }
-    let actual_intervals = points.len() - 1;
-    let padding_triangles = max_intervals
-        .saturating_sub(actual_intervals)
-        .saturating_mul(CURVE_STEPS * 2);
-    push_degenerate_triangles(&mut path, origin, padding_triangles);
-    Some(path)
+    path.build().ok()
 }
 pub struct GraphSample {
     pub at: Instant,
@@ -181,14 +138,32 @@ impl History {
     }
 }
 
+/// Rounds the retained peak up to a 1–1.5–2–2.5–3–4–5–6–8 step in the displayed
+/// KiB/MiB unit. A saturated link then lands just above its ceiling instead of
+/// doubling to the next power of two, and every fifth of the scale stays readable.
 pub fn network_scale(history: &History) -> f32 {
+    const STEPS: [f32; 10] = [1., 1.5, 2., 2.5, 3., 4., 5., 6., 8., 10.];
     let peak = history
         .samples
         .iter()
         .map(|sample| sample.rx.max(sample.tx))
-        .fold(1024., f32::max)
-        * 1.1;
-    2_f32.powf(peak.log2().ceil())
+        .fold(0., f32::max)
+        * 1.05;
+    if peak <= 2048. {
+        return 2048.;
+    }
+    let unit = if peak >= 1024. * 1024. {
+        1024. * 1024.
+    } else {
+        1024.
+    };
+    let value = peak / unit;
+    let decade = 10_f32.powf(value.log10().floor());
+    let step = STEPS
+        .into_iter()
+        .find(|step| step * decade >= value)
+        .unwrap_or(10.);
+    step * decade * unit
 }
 
 /// Timestamped, smoothly interpolated paths; CPU layers are weighted by core count,
@@ -256,36 +231,39 @@ pub fn graph(
                         .iter()
                         .map(|(x, s)| {
                             let v = if series == 0 { s.rx } else { s.tx };
-                            Some((*x, h * (1. - v / max)))
+                            (*x, h * (1. - v / max))
                         })
                         .collect();
-                    if let Some(path) = smooth_stroke(&points, origin, 1.8, max_intervals) {
+                    if let Some(path) = smooth_stroke(&points, origin, 1.8) {
                         window.paint_path(path, rgb(if series == 0 { 0x3584e4 } else { 0xff7800 }));
                     }
                 }
             } else if let Some(uuid) = &gpu_uuid {
                 for series in 0..2 {
-                    let mut points = Vec::with_capacity(visible.len());
+                    let color = rgb(if series == 0 { 0x2ec27e } else { 0x9141ac });
+                    // Missing samples split the line; never bridge a gap with a curve.
+                    let mut points = vec![];
                     for (x, s) in &visible {
-                        let Some(g) = s.gpus.iter().find(|g| &g.uuid == uuid) else {
-                            points.push(None);
-                            continue;
-                        };
-                        let v = if series == 0 {
-                            g.utilization.map(|u| u as f32)
-                        } else if g.memory_total > 0 {
-                            Some(g.memory_used as f32 / g.memory_total as f32 * 100.)
-                        } else {
-                            None
-                        };
+                        let v = s.gpus.iter().find(|g| &g.uuid == uuid).and_then(|g| {
+                            if series == 0 {
+                                g.utilization.map(|u| u as f32)
+                            } else if g.memory_total > 0 {
+                                Some(g.memory_used as f32 / g.memory_total as f32 * 100.)
+                            } else {
+                                None
+                            }
+                        });
                         let Some(v) = v else {
-                            points.push(None);
+                            if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                                window.paint_path(path, color);
+                            }
+                            points.clear();
                             continue;
                         };
-                        points.push(Some((*x, h * (1. - v.clamp(0., 100.) / 100.))));
+                        points.push((*x, h * (1. - v.clamp(0., 100.) / 100.)));
                     }
-                    if let Some(path) = smooth_stroke(&points, origin, 1.8, max_intervals) {
-                        window.paint_path(path, rgb(if series == 0 { 0x2ec27e } else { 0x9141ac }));
+                    if let Some(path) = smooth_stroke(&points, origin, 1.8) {
+                        window.paint_path(path, color);
                     }
                 }
             } else {
@@ -491,7 +469,22 @@ mod tests {
             gpus: vec![],
         }));
 
-        assert_eq!(network_scale(&history), 8_192.);
+        assert_eq!(network_scale(&history), 6_144.);
         assert_eq!(network_scale(&History::new()), 2_048.);
+    }
+
+    #[test]
+    fn saturated_link_does_not_double_the_network_scale() {
+        let mut history = History::new();
+        // A link capped at 120 Mbit/s carries 15 MB/s, about 14.3 MiB/s.
+        history.samples.push_back(Arc::new(GraphSample {
+            at: Instant::now(),
+            cores: vec![],
+            rx: 15_000_000.,
+            tx: 0.,
+            gpus: vec![],
+        }));
+
+        assert_eq!(network_scale(&history), 20. * 1024. * 1024.);
     }
 }

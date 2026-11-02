@@ -43,14 +43,6 @@ fn main() {
         }
         return;
     }
-    // GPUI's multisampled path target grows NVIDIA VRAM as chart geometry fills its
-    // history window. Single-sample paths remain smooth at desktop scale, keep the
-    // same animation cadence, and let the renderer hold a stable allocation. Honor
-    // an explicit override for driver testing.
-    if std::env::var_os("ZED_PATH_SAMPLE_COUNT").is_none() {
-        // SAFETY: this runs before GPUI starts its renderer or any worker threads.
-        unsafe { std::env::set_var("ZED_PATH_SAMPLE_COUNT", "1") };
-    }
     Application::new().run(|cx: &mut App| {
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {
@@ -70,7 +62,7 @@ fn main() {
                 ..Default::default()
             },
             |window, cx| {
-                window.set_window_title("Strata — Resource Monitor");
+                window.set_window_title("Resource Monitor");
                 window.request_decorations(WindowDecorations::Client);
                 cx.new(|cx| ui::Monitor::new(window, cx))
             },

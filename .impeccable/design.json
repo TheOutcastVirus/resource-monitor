@@ -87,30 +87,23 @@
     },
     "rendering": {
       "curve": {
+        "lines": "anti-aliased cubic Bézier strokes with control points clamped to each sampled interval",
+        "lineAppliesTo": ["network receive", "network transmit", "GPU utilization", "VRAM utilization"],
         "interpolation": "Catmull-Rom clamped to the endpoints of each sampled interval",
         "subdivisionsPerInterval": 4,
-        "appliesTo": ["network receive", "network transmit", "GPU utilization", "VRAM utilization", "CPU stack"]
+        "appliesTo": ["CPU stack"]
       },
       "geometry": {
-        "batchShape": "fixed-size direct triangle batches",
-        "lineSegment": "one quad emitted as two triangles",
         "cpuSubdivision": "one quad emitted as two triangles"
       },
       "allocation": {
-        "linePadding": "degenerate triangles pad network, GPU, and VRAM batches to the polling-derived maximum interval count",
         "cpuPrimer": "one transparent bounded batch completes the final CPU triangle count from the first usable frame",
-        "gpuGaps": "missing device, utilization, or memory samples emit degenerate padding and never bridge the missing interval"
+        "gpuGaps": "missing device, utilization, or memory samples split the line and never bridge the missing interval"
       },
       "historyBounds": {
         "time": "62000ms",
         "samples": 249,
         "minimumPollingInterval": "250ms"
-      },
-      "linuxPathSampling": {
-        "environmentVariable": "ZED_PATH_SAMPLE_COUNT",
-        "default": "1",
-        "override": "preserve any explicitly supplied value for diagnostics",
-        "initialization": "set before GPUI starts the renderer or worker threads"
       },
       "windowBackground": {
         "appearance": "Opaque",
@@ -167,7 +160,7 @@
     {
       "name": "Ruled Telemetry Graph",
       "kind": "custom",
-      "description": "The low-cost GPU-rendered frame: every curve uses bounded four-step Catmull-Rom geometry in fixed-size direct triangle batches, with two triangles per CPU quad and no bridges across missing GPU samples.",
+      "description": "The low-cost GPU-rendered frame: lines use anti-aliased clamped Bézier strokes, the CPU stack uses bounded four-step Catmull-Rom triangles, and missing GPU samples are never bridged.",
       "html": "<figure class=\"ds-chart\"><div class=\"ds-chart-row\"><div class=\"ds-chart-frame\"><svg viewBox=\"0 0 300 90\" preserveAspectRatio=\"none\" aria-label=\"Network history\"><path class=\"ds-rx\" d=\"M0 74 C45 74 58 36 104 42 S170 68 212 30 S265 55 300 18\"/><path class=\"ds-tx\" d=\"M0 82 C55 68 92 78 130 55 S214 62 300 35\"/></svg></div><div class=\"ds-chart-scale\"><span>8.2 kB/s</span><span>6.6 kB/s</span><span>4.9 kB/s</span><span>3.3 kB/s</span><span>1.6 kB/s</span><span>0 B/s</span></div></div><div class=\"ds-chart-axis\"><span>1 min · auto scale</span><span>30 sec</span><span>now</span></div><div class=\"ds-network-footer\"><div><b>enp4s0</b><span><i>↓ 2.4 MB/s</i><em>↑ 320 kB/s</em></span><small>Totals ↓ 18.2 GiB ↑ 4.1 GiB</small></div><div><b>wlp3s0</b><span><i>↓ 0 B/s</i><em>↑ 0 B/s</em></span><small>Totals ↓ 2.1 GiB ↑ 611 MiB</small></div></div><div class=\"ds-core-legend\"><span><i></i>CPU1 <b>12.4%</b></span><span><i></i>CPU7 <b>28.0%</b></span><span><i></i>CPU13 <b>6.1%</b></span><span><i></i>CPU19 <b>44.2%</b></span></div></figure>",
       "css": ".ds-chart { margin: 0; color: #6f6b72; font: 400 10px 'Noto Sans', Ubuntu, sans-serif; } .ds-chart-row { display: flex; gap: 8px; } .ds-chart-frame { flex: 1; height: 90px; border: 1px solid #d9d9d9; background-color: #fff; background-image: linear-gradient(to right, rgba(216,218,221,.69) 1px, transparent 1px), linear-gradient(to bottom, #d8dadd 1px, transparent 1px); background-size: 16.666% 100%, 100% 20%; overflow: hidden; } .ds-chart svg { width: 100%; height: 100%; fill: none; stroke-width: 1.8; } .ds-chart .ds-rx { stroke: #3584e4; } .ds-chart .ds-tx { stroke: #ff7800; } .ds-chart-scale { width: 64px; display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-size: 9px; } .ds-chart-axis { display: flex; justify-content: space-between; padding-right: 72px; margin-top: 4px; } .ds-network-footer { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; margin-top: 8px; border-top: 1px solid #d9d9d9; } .ds-network-footer > div { flex: 1; min-width: 180px; padding: 0 8px; display: flex; flex-direction: column; gap: 4px; } .ds-network-footer > div:not(:last-child) { border-right: 1px solid #d9d9d9; } .ds-network-footer b { color: #3d3846; font-weight: 600; } .ds-network-footer span { display: flex; gap: 12px; } .ds-network-footer i { color: #1c71d8; font-style: normal; } .ds-network-footer em { color: #c64600; font-style: normal; } .ds-network-footer small { color: #6f6b72; } .ds-core-legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 20px; margin-top: 8px; } .ds-core-legend span { display: flex; align-items: center; gap: 8px; } .ds-core-legend i { width: 10px; height: 10px; background: #e01b24; } .ds-core-legend b { flex: 1; text-align: right; color: #3d3846; font-weight: 400; } .ds-chart:focus-within { outline: 2px solid #3584e4; outline-offset: 2px; }"
     },
@@ -188,7 +181,7 @@
       "Blue active and sort states; categorical color identifies telemetry.",
       "Visible but restrained grip, hide, span, and resize affordances.",
       "Integrated GPU identity, metrics, meters, and history in one ordered instrument.",
-      "Real-time graph movement with bounded data, fixed-size triangle batches, and no decorative animation."
+      "Real-time graph movement with bounded data and no decorative animation."
     ],
     "rules": [
       { "name": "The Signal Color Rule", "body": "Use color to identify a series, value, selection, sort, or active state; do not spend it on empty decoration.", "section": "colors" },
@@ -201,21 +194,20 @@
       "Do keep panel grip, width, hide, and resize affordances visible, restrained, and recoverable.",
       "Do preserve the full 24-core legend and its stable correspondence to the CPU graph layers.",
       "Do keep the CPU legend column-major and dynamically limited to one through four equal columns.",
-      "Do derive network plot geometry and its right-side labels from one exact power-of-two scale.",
+      "Do derive network plot geometry and its right-side labels from one exact rounded scale.",
       "Do keep GPU detail metrics integrated in the main GPU panel and normalize legacy standalone detail tiles away.",
       "Do use the shared continuous five-stop temperature scale for CPU and GPU temperatures.",
       "Do right-align numeric table data, left-align commands and users, and expose active sorting in blue with an arrow.",
       "Do show unavailable values explicitly with an em dash or specific status copy.",
       "Do keep graph histories bounded to both 62 seconds and 249 samples, and keep smooth interpolation within adjacent sampled values.",
-      "Do preserve fixed-size direct triangle batches, degenerate gap padding, and the transparent CPU allocation primer.",
-      "Do retain the Linux single-sample path default while honoring an explicit diagnostic override."
+      "Do preserve direct CPU triangle emission and the transparent CPU allocation primer."
     ],
     "donts": [
       "Don't add decorative motion; real-time graph movement is the system's only continuous animation.",
       "Don't add shadows, glass effects, nested decorative cards, oversized type, or spacious marketing-page rhythms.",
       "Don't hide or simplify away the panel configurability that distinguishes Strata.",
       "Don't restore a standalone GPU details panel or split its NVTOP-derived reading order across panels.",
-      "Don't replace direct triangle emission with a chart library, per-frame polygon tessellation, or variably growing path batches.",
+      "Don't replace direct CPU triangle emission with a chart library or per-frame polygon tessellation.",
       "Don't bridge missing GPU samples or remove the CPU primer that stabilizes the final upload allocation.",
       "Don't fabricate zeroes for missing telemetry or let interpolation imply measurements that were never sampled."
     ]

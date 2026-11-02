@@ -1452,7 +1452,7 @@ impl Render for Monitor {
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_size(px(13.))
-                            .child("Strata"),
+                            .child("Resource Monitor"),
                     )
                     .child(
                         div()
