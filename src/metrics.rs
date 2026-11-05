@@ -18,6 +18,7 @@ use std::{
 #[derive(Clone, Default, Debug)]
 pub struct Process {
     pub pid: u32,
+    pub ppid: u32,
     pub start_time: u64,
     pub tcp: Option<u32>,
     pub udp: Option<u32>,
@@ -31,6 +32,9 @@ pub struct Process {
     pub gpu_memory: Option<u64>,
     pub gpu: Option<u32>,
     pub kind: String,
+    /// Processes with equal keys belong to one application; see `apps::Apps::group`.
+    pub group: String,
+    pub app: Option<Arc<crate::apps::App>>,
 }
 #[derive(Clone, Default, Debug)]
 pub struct Gpu {
@@ -215,13 +219,14 @@ fn memory_breakdown(text: &str) -> [u64; 4] {
     [total - free - buffers - cache, cache, buffers, free]
 }
 // Return start time as well as CPU ticks so recycled PIDs never inherit old usage.
-fn parse_stat(text: &str) -> Option<(String, String, u64, u64, u64)> {
+fn parse_stat(text: &str) -> Option<(String, String, u32, u64, u64, u64)> {
     let left = text.find('(')?;
     let right = text.rfind(')')?;
     let v: Vec<&str> = text.get(right + 2..)?.split_whitespace().collect();
     Some((
         text[left + 1..right].into(),
         v.first()?.to_string(),
+        v.get(1)?.parse().ok()?,
         v.get(11)?.parse::<u64>().ok()? + v.get(12)?.parse::<u64>().ok()?,
         v.get(19)?.parse().ok()?,
         v.get(17)?.parse().ok()?,
@@ -231,6 +236,7 @@ pub struct Sampler {
     previous: Vec<CpuTime>,
     network: crate::network::NetworkSampler,
     pids: HashMap<u32, (u64, u64)>,
+    apps: crate::apps::Apps,
     users: HashMap<u32, String>,
     name: String,
     thermal: Vec<String>,
@@ -282,6 +288,7 @@ impl Sampler {
             previous: vec![],
             network: crate::network::NetworkSampler::new(),
             pids: HashMap::new(),
+            apps: crate::apps::Apps::new(),
             users,
             name,
             thermal,
@@ -317,6 +324,7 @@ impl Sampler {
             .filter(|t| (0. ..150.).contains(t))
             .reduce(f32::max);
         let mut processes = vec![];
+        let mut cgroups = vec![];
         let mut next_pids = HashMap::new();
         if let Ok(entries) = fs::read_dir("/proc") {
             for e in entries.flatten() {
@@ -327,7 +335,7 @@ impl Sampler {
                 let Ok(stat) = fs::read_to_string(path.join("stat")) else {
                     continue;
                 };
-                let Some((name, state, ticks, born, threads)) = parse_stat(&stat) else {
+                let Some((name, state, ppid, ticks, born, threads)) = parse_stat(&stat) else {
                     continue;
                 };
                 let cpu = self
@@ -373,8 +381,10 @@ impl Sampler {
                 let user = uid
                     .map(|u| self.users.get(&u).cloned().unwrap_or(u.to_string()))
                     .unwrap_or("—".into());
+                cgroups.push(fs::read_to_string(path.join("cgroup")).unwrap_or_default());
                 processes.push(Process {
                     pid,
+                    ppid,
                     start_time: born,
                     name,
                     command,
@@ -388,6 +398,7 @@ impl Sampler {
             }
         }
         self.pids = next_pids;
+        self.apps.group(&mut processes, &cgroups);
         let network = self.network.sample(&mut processes);
         let mut gpus = vec![];
         let mut gpu_error = self.nvml_error.clone();
@@ -524,9 +535,10 @@ mod tests {
     #[test]
     fn process_names_can_contain_parentheses_and_spaces() {
         let s = "123 (a (worker) job) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21";
-        let (name, state, ticks, born, threads) = parse_stat(s).unwrap();
+        let (name, state, ppid, ticks, born, threads) = parse_stat(s).unwrap();
         assert_eq!(name, "a (worker) job");
         assert_eq!(state, "S");
+        assert_eq!(ppid, 1);
         assert_eq!(ticks, 23);
         assert_eq!(born, 19);
         assert_eq!(threads, 17);

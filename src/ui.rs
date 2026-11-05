@@ -1,7 +1,7 @@
-use crate::theme::{ACCENT, BG, Icon, LINE, MUTED, PANEL, RAISED, TEXT, icon, icon_button};
+use crate::theme::{self, Icon, colors, icon, icon_button};
 use crate::{
-    chart::{self, COLORS, History},
-    layout::{Layout, Panel, Settings},
+    chart::{self, History},
+    layout::{Layout, Panel, Settings, Theme},
     metrics::{self, Feed, Process, Snapshot},
 };
 use gpui::{prelude::*, *};
@@ -16,8 +16,8 @@ impl Render for PanelDrag {
         div()
             .px_4()
             .py_2()
-            .bg(rgb(LINE))
-            .text_color(rgb(ACCENT))
+            .bg(rgb(colors().line))
+            .text_color(rgb(colors().accent))
             .rounded_md()
             .child(self.0.title())
     }
@@ -66,16 +66,16 @@ fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<
         .px(px(10.))
         .py(px(5.))
         .rounded(px(6.))
-        .bg(rgb(RAISED))
+        .bg(rgb(colors().raised))
         .border_1()
-        .border_color(rgb(LINE))
+        .border_color(rgb(colors().line))
         .cursor_pointer()
-        .text_color(rgb(TEXT))
-        .hover(|s| s.bg(rgb(0xe7e7e7)))
+        .text_color(rgb(colors().text))
+        .hover(|s| s.bg(rgb(colors().control_hover)))
         .child(label.into())
 }
 fn muted(label: impl Into<SharedString>) -> Div {
-    div().text_color(rgb(MUTED)).child(label.into())
+    div().text_color(rgb(colors().muted)).child(label.into())
 }
 fn inline_metric(label: &'static str, value: String, label_color: u32, value_color: u32) -> Div {
     div()
@@ -104,23 +104,17 @@ fn mix_color(from: u32, to: u32, amount: f32) -> u32 {
 }
 
 fn temperature_color(temperature: f32) -> u32 {
-    const STOPS: [(f32, u32); 5] = [
-        (30., 0x3584e4),
-        (55., 0x2ec27e),
-        (70., 0xe5a50a),
-        (85., 0xff7800),
-        (100., 0xe01b24),
-    ];
+    let stops = &colors().temperature;
     if !temperature.is_finite() {
-        return MUTED;
+        return colors().muted;
     }
-    for pair in STOPS.windows(2) {
+    for pair in stops.windows(2) {
         if temperature <= pair[1].0 {
             let amount = ((temperature - pair[0].0) / (pair[1].0 - pair[0].0)).clamp(0., 1.);
             return mix_color(pair[0].1, pair[1].1, amount);
         }
     }
-    STOPS.last().unwrap().1
+    stops[stops.len() - 1].1
 }
 
 fn gpu_meter(label: &'static str, value: String, ratio: f32, color: u32) -> Div {
@@ -143,7 +137,7 @@ fn gpu_meter(label: &'static str, value: String, ratio: f32, color: u32) -> Div 
                 .h(px(8.))
                 .rounded(px(2.))
                 .overflow_hidden()
-                .bg(rgb(LINE))
+                .bg(rgb(colors().line))
                 .child(
                     div()
                         .h_full()
@@ -162,6 +156,7 @@ fn gpu_meter(label: &'static str, value: String, ratio: f32, color: u32) -> Div 
 impl Monitor {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let (settings, error) = Settings::load();
+        theme::set_dark(settings.theme == Theme::Dark);
         let focus = cx.focus_handle();
         window.focus(&focus);
         let cpu_chart = cx.new(|cx| chart::AnimatedChart::new(window, cx));
@@ -172,7 +167,7 @@ impl Monitor {
         for table in [&process_table, &gpu_table] {
             cx.subscribe(table, |this, _, event, cx| {
                 match event {
-                    crate::table::TableEvent::Selected(p) => this.selected = Some(p.clone()),
+                    crate::table::TableEvent::Selected(p) => this.selected = Some(*p.clone()),
                     crate::table::TableEvent::Copied(pid) => {
                         this.notice = format!("Copied PID {pid}")
                     }
@@ -359,9 +354,9 @@ impl Monitor {
             .flex()
             .flex_col()
             .gap_2()
-            .bg(rgb(RAISED))
+            .bg(rgb(colors().raised))
             .border_b_1()
-            .border_color(rgb(LINE))
+            .border_color(rgb(colors().line))
             .child(
                 div()
                     .flex()
@@ -398,9 +393,9 @@ impl Monitor {
                             .flex()
                             .items_center()
                             .rounded(px(4.))
-                            .bg(rgb(PANEL))
+                            .bg(rgb(colors().panel))
                             .border_1()
-                            .border_color(rgb(LINE))
+                            .border_color(rgb(colors().line))
                             .child(
                                 button(
                                     SharedString::from(format!("load-{name}")),
@@ -441,14 +436,31 @@ impl Monitor {
                     .children((1..=3).map(|n| {
                         button(("columns", n), SharedString::from(n.to_string()))
                             .when(self.settings.layout.columns == n, |d| {
-                                d.text_color(rgb(ACCENT))
+                                d.text_color(rgb(colors().accent))
                             })
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.settings.layout.columns = n;
                                 this.save();
                                 cx.notify();
                             }))
-                    })),
+                    }))
+                    .child(muted("Theme").ml_3())
+                    .children(
+                        [(Theme::Dark, "Dark"), (Theme::Light, "Light")]
+                            .into_iter()
+                            .map(|(theme, label)| {
+                                button(SharedString::from(format!("theme-{label}")), label)
+                                    .when(self.settings.theme == theme, |d| {
+                                        d.text_color(rgb(colors().accent))
+                                    })
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.settings.theme = theme;
+                                        theme::set_dark(theme == Theme::Dark);
+                                        this.save();
+                                        cx.notify();
+                                    }))
+                            }),
+                    ),
             )
             .child(
                 div()
@@ -472,7 +484,7 @@ impl Monitor {
                         .items_center()
                         .gap_1()
                         .child(icon(if visible { Icon::Check } else { Icon::Plus }))
-                        .when(visible, |s| s.text_color(rgb(ACCENT)))
+                        .when(visible, |s| s.text_color(rgb(colors().accent)))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if let Some(t) =
                                 this.settings.layout.tiles.iter_mut().find(|t| t.panel == p)
@@ -497,7 +509,7 @@ impl Monitor {
                             SharedString::from(format!("{}s", ms as f32 / 1000.)),
                         )
                         .when(self.settings.layout.poll_ms == ms, |s| {
-                            s.text_color(rgb(ACCENT))
+                            s.text_color(rgb(colors().accent))
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.settings.layout.poll_ms = ms;
@@ -512,7 +524,7 @@ impl Monitor {
                             SharedString::from(format!("{fps} fps")),
                         )
                         .when(self.settings.layout.fps == fps, |s| {
-                            s.text_color(rgb(ACCENT))
+                            s.text_color(rgb(colors().accent))
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.settings.layout.fps = fps;
@@ -569,12 +581,15 @@ impl Monitor {
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(ACCENT))
+                            .text_color(rgb(colors().accent))
                             .child(format!("{:.1}%", s.cpu)),
                     )
                     .child(
                         div()
-                            .text_color(rgb(s.temperature.map(temperature_color).unwrap_or(MUTED)))
+                            .text_color(rgb(s
+                                .temperature
+                                .map(temperature_color)
+                                .unwrap_or(colors().muted)))
                             .child(
                                 s.temperature
                                     .map(|t| format!("{t:.0} °C"))
@@ -601,7 +616,7 @@ impl Monitor {
                                         div()
                                             .size(px(10.))
                                             .mr_2()
-                                            .bg(rgb(COLORS[i % COLORS.len()])),
+                                            .bg(rgb(colors().cores[i % colors().cores.len()])),
                                     )
                                     .child(muted(format!("CPU{}", i + 1)))
                                     .child(
@@ -634,7 +649,7 @@ impl Monitor {
                             .h_full()
                             .overflow_hidden()
                             .border_1()
-                            .border_color(rgb(LINE))
+                            .border_color(rgb(colors().line))
                             .child(if gpu.is_some() {
                                 self.gpu_chart.clone()
                             } else {
@@ -649,7 +664,7 @@ impl Monitor {
                             .flex_col()
                             .justify_between()
                             .text_size(px(9.))
-                            .text_color(rgb(MUTED))
+                            .text_color(rgb(colors().muted))
                             .child("100%")
                             .child("80%")
                             .child("60%")
@@ -664,7 +679,7 @@ impl Monitor {
                     .justify_between()
                     .pr(px(40.))
                     .text_size(px(9.))
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(colors().muted))
                     .child("1 min")
                     .child("50 sec")
                     .child("40 sec")
@@ -685,10 +700,10 @@ impl Monitor {
             }
         };
         let segments = [
-            ("Used", s.memory_active, 0x2ec27e),
-            ("Cache", s.memory_cached, 0x9141ac),
-            ("Buffers", s.memory_buffers, 0x3584e4),
-            ("Free", s.memory_free, 0xd5d5d5),
+            ("Used", s.memory_active, colors().memory_used),
+            ("Cache", s.memory_cached, colors().memory_cache),
+            ("Buffers", s.memory_buffers, colors().memory_buffer),
+            ("Free", s.memory_free, colors().memory_free),
         ];
         let swap = if s.swap_total > 0 {
             s.swap_used as f32 / s.swap_total as f32
@@ -716,7 +731,7 @@ impl Monitor {
                             .h(px(12.))
                             .rounded(px(3.))
                             .overflow_hidden()
-                            .bg(rgb(LINE))
+                            .bg(rgb(colors().line))
                             .children(segments.iter().map(|(_, v, c)| {
                                 div().h_full().w(relative(ratio(*v))).bg(rgb(*c))
                             })),
@@ -760,13 +775,13 @@ impl Monitor {
                             .flex_1()
                             .h(px(12.))
                             .rounded(px(3.))
-                            .bg(rgb(LINE))
+                            .bg(rgb(colors().line))
                             .overflow_hidden()
                             .child(
                                 div()
                                     .h_full()
                                     .w(relative(swap.clamp(0., 1.)))
-                                    .bg(rgb(0xc061cb)),
+                                    .bg(rgb(colors().swap)),
                             ),
                     )
                     .child(div().w(px(130.)).text_right().text_size(px(10.)).child(
@@ -809,7 +824,7 @@ impl Monitor {
                         "GPU",
                         opt(g.utilization, "%"),
                         gpu_ratio,
-                        0x2e7d4f,
+                        colors().gpu,
                     ))
                     .child(gpu_meter(
                         "VRAM",
@@ -819,13 +834,13 @@ impl Monitor {
                             metrics::bytes(g.memory_total)
                         ),
                         vram_ratio,
-                        0x7b3f94,
+                        colors().vram,
                     )),
             )
             .child(self.chart(Some(g.uuid.clone())))
     }
     fn no_gpu(&self) -> Div {
-        div().p_3().text_color(rgb(MUTED)).child(
+        div().p_3().text_color(rgb(colors().muted)).child(
             self.sample
                 .gpu_error
                 .clone()
@@ -852,28 +867,28 @@ impl Monitor {
                     .child(inline_metric(
                         "Device",
                         format!("{}  [{}]", self.gpu_index, g.name),
-                        0x2e7d4f,
-                        TEXT,
+                        colors().gpu,
+                        colors().text,
                     ))
                     .child(inline_metric(
                         "PCIe",
                         format!("Gen {} ×{}", opt(g.generation, ""), opt(g.width, "")),
-                        MUTED,
-                        TEXT,
+                        colors().muted,
+                        colors().text,
                     ))
                     .child(inline_metric(
                         "RX",
                         g.rx.map(|value| format!("{:.1} MiB/s", value as f32 / 1024.))
                             .unwrap_or("—".into()),
-                        MUTED,
-                        TEXT,
+                        colors().muted,
+                        colors().text,
                     ))
                     .child(inline_metric(
                         "TX",
                         g.tx.map(|value| format!("{:.1} MiB/s", value as f32 / 1024.))
                             .unwrap_or("—".into()),
-                        MUTED,
-                        TEXT,
+                        colors().muted,
+                        colors().text,
                     ))
                     .child(div().flex_1())
                     .when(self.sample.gpus.len() > 1, |row| {
@@ -904,24 +919,29 @@ impl Monitor {
                     .child(inline_metric(
                         "GPU",
                         format!("{} MHz", opt(g.clock, "")),
-                        0x2e7d4f,
-                        TEXT,
+                        colors().gpu,
+                        colors().text,
                     ))
                     .child(inline_metric(
                         "MEM",
                         format!("{} MHz", opt(g.memory_clock, "")),
-                        0x7b3f94,
-                        TEXT,
+                        colors().vram,
+                        colors().text,
                     ))
                     .child(inline_metric(
                         "TEMP",
                         opt(g.temperature, " °C"),
-                        MUTED,
+                        colors().muted,
                         g.temperature
                             .map(|temperature| temperature_color(temperature as f32))
-                            .unwrap_or(MUTED),
+                            .unwrap_or(colors().muted),
                     ))
-                    .child(inline_metric("FAN", opt(g.fan, "%"), MUTED, TEXT))
+                    .child(inline_metric(
+                        "FAN",
+                        opt(g.fan, "%"),
+                        colors().muted,
+                        colors().text,
+                    ))
                     .child(inline_metric(
                         "POW",
                         format!(
@@ -933,11 +953,21 @@ impl Monitor {
                                 .map(|power| (power / 1000).to_string())
                                 .unwrap_or("—".into())
                         ),
-                        MUTED,
-                        TEXT,
+                        colors().muted,
+                        colors().text,
                     ))
-                    .child(inline_metric("ENC", opt(g.encoder, "%"), MUTED, TEXT))
-                    .child(inline_metric("DEC", opt(g.decoder, "%"), MUTED, TEXT)),
+                    .child(inline_metric(
+                        "ENC",
+                        opt(g.encoder, "%"),
+                        colors().muted,
+                        colors().text,
+                    ))
+                    .child(inline_metric(
+                        "DEC",
+                        opt(g.decoder, "%"),
+                        colors().muted,
+                        colors().text,
+                    )),
             )
     }
     fn processes(&self, gpu: bool, _: &mut Context<Self>) -> Div {
@@ -973,13 +1003,13 @@ impl Monitor {
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(0x1c71d8))
+                            .text_color(rgb(colors().receive))
                             .child(format!("↓ {}", crate::network::rate(n.rx_rate))),
                     )
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(rgb(0xc64600))
+                            .text_color(rgb(colors().transmit))
                             .child(format!("↑ {}", crate::network::rate(n.tx_rate))),
                     )
                     .child(muted(format!(
@@ -1000,7 +1030,7 @@ impl Monitor {
                             .h_full()
                             .overflow_hidden()
                             .border_1()
-                            .border_color(rgb(LINE))
+                            .border_color(rgb(colors().line))
                             .child(self.network_chart.clone()),
                     )
                     .child(
@@ -1012,7 +1042,7 @@ impl Monitor {
                             .justify_between()
                             .text_right()
                             .text_size(px(9.))
-                            .text_color(rgb(MUTED))
+                            .text_color(rgb(colors().muted))
                             .children(
                                 [1., 0.8, 0.6, 0.4, 0.2, 0.]
                                     .into_iter()
@@ -1026,7 +1056,7 @@ impl Monitor {
                     .justify_between()
                     .pr(px(72.))
                     .text_size(px(10.))
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(colors().muted))
                     .child("1 min · auto scale")
                     .child("30 sec")
                     .child("now"),
@@ -1038,7 +1068,7 @@ impl Monitor {
                     .gap_2()
                     .pt_2()
                     .border_t_1()
-                    .border_color(rgb(LINE))
+                    .border_color(rgb(colors().line))
                     .text_size(px(10.))
                     .children(n.interfaces.iter().enumerate().map(|(index, interface)| {
                         div()
@@ -1049,7 +1079,7 @@ impl Monitor {
                             .gap_1()
                             .px_2()
                             .when(index + 1 < interface_count, |d| {
-                                d.border_r_1().border_color(rgb(LINE))
+                                d.border_r_1().border_color(rgb(colors().line))
                             })
                             .child(
                                 div()
@@ -1060,14 +1090,13 @@ impl Monitor {
                                 div()
                                     .flex()
                                     .gap_3()
-                                    .child(div().text_color(rgb(0x1c71d8)).child(format!(
+                                    .child(div().text_color(rgb(colors().receive)).child(format!(
                                         "↓ {}",
                                         crate::network::rate(interface.rx_rate)
                                     )))
-                                    .child(div().text_color(rgb(0xc64600)).child(format!(
-                                        "↑ {}",
-                                        crate::network::rate(interface.tx_rate)
-                                    ))),
+                                    .child(div().text_color(rgb(colors().transmit)).child(
+                                        format!("↑ {}", crate::network::rate(interface.tx_rate)),
+                                    )),
                             )
                             .child(muted(format!(
                                 "Totals  ↓ {}   ↑ {}",
@@ -1111,16 +1140,16 @@ impl Monitor {
             .w_full()
             .min_w_0()
             .rounded(px(8.))
-            .bg(rgb(PANEL))
+            .bg(rgb(colors().panel))
             .border_1()
-            .border_color(rgb(LINE))
+            .border_color(rgb(colors().line))
             .overflow_hidden()
             .on_drop(cx.listener(move |this, drag: &PanelDrag, _, cx| {
                 this.settings.layout.move_before(drag.0, p);
                 this.save();
                 cx.notify();
             }))
-            .drag_over::<PanelDrag>(|s, _, _, _| s.border_color(rgb(ACCENT)))
+            .drag_over::<PanelDrag>(|s, _, _, _| s.border_color(rgb(colors().accent)))
             .child(
                 div()
                     .id(SharedString::from(format!("header-{p:?}")))
@@ -1130,9 +1159,9 @@ impl Monitor {
                     .h(px(38.))
                     .flex_shrink_0()
                     .px_3()
-                    .bg(rgb(PANEL))
+                    .bg(rgb(colors().panel))
                     .border_b_1()
-                    .border_color(rgb(LINE))
+                    .border_color(rgb(colors().line))
                     .when(true, |d| {
                         d.cursor_move()
                             .on_drag(PanelDrag(p), |drag, _, _, cx| cx.new(|_| drag.clone()))
@@ -1204,11 +1233,11 @@ impl Monitor {
                         .flex_shrink_0()
                         .w_full()
                         .cursor_row_resize()
-                        .hover(|s| s.bg(rgb(LINE)))
+                        .hover(|s| s.bg(rgb(colors().line)))
                         .flex()
                         .justify_center()
                         .items_center()
-                        .child(div().w(px(22.)).h(px(1.)).bg(rgb(LINE)))
+                        .child(div().w(px(22.)).h(px(1.)).bg(rgb(colors().line)))
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, e: &MouseDownEvent, window, cx| {
@@ -1295,8 +1324,8 @@ impl Monitor {
                         .flex_shrink_0()
                         .border_1()
                         .border_dashed()
-                        .border_color(rgb(LINE))
-                        .text_color(rgb(MUTED))
+                        .border_color(rgb(colors().line))
+                        .text_color(rgb(colors().muted))
                         .child("Drop panel here")
                         .on_drop(cx.listener(|this, drag: &PanelDrag, _, cx| {
                             if let Some(i) = this
@@ -1379,8 +1408,8 @@ impl Render for Monitor {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
+            .bg(rgb(colors().bg))
+            .text_color(rgb(colors().text))
             .font_family("Noto Sans")
             .text_size(px(self.settings.layout.font_size))
             .on_key_down(cx.listener(Self::key))
@@ -1444,9 +1473,9 @@ impl Render for Monitor {
                     .items_center()
                     .px_3()
                     .gap_1()
-                    .bg(rgb(PANEL))
+                    .bg(rgb(colors().panel))
                     .border_b_1()
-                    .border_color(rgb(LINE))
+                    .border_color(rgb(colors().line))
                     .text_size(px(11.))
                     .child(
                         div()
@@ -1469,7 +1498,7 @@ impl Render for Monitor {
                             .items_center()
                             .gap_1()
                             .child(icon(if self.paused { Icon::Play } else { Icon::Pause }))
-                            .when(self.paused, |d| d.text_color(rgb(0xc64600)))
+                            .when(self.paused, |d| d.text_color(rgb(colors().transmit)))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.toggle_pause();
                                 cx.notify();
@@ -1502,7 +1531,7 @@ impl Render for Monitor {
                             .items_center()
                             .gap_1()
                             .child(icon(Icon::Columns))
-                            .when(self.menu, |s| s.text_color(rgb(ACCENT)))
+                            .when(self.menu, |s| s.text_color(rgb(colors().accent)))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.menu = !this.menu;
                                 cx.notify();
@@ -1533,9 +1562,9 @@ impl Render for Monitor {
                     div()
                         .px_4()
                         .py_2()
-                        .bg(rgb(PANEL))
+                        .bg(rgb(colors().panel))
                         .border_t_1()
-                        .border_color(rgb(LINE))
+                        .border_color(rgb(colors().line))
                         .flex()
                         .flex_col()
                         .gap_1()
@@ -1543,10 +1572,12 @@ impl Render for Monitor {
                             div()
                                 .flex()
                                 .items_center()
-                                .child(div().flex_1().text_color(rgb(ACCENT)).child(format!(
-                                    "{} · PID {} · {} · state {} · {} threads",
-                                    p.name, p.pid, p.user, p.state, p.threads
-                                )))
+                                .child(div().flex_1().text_color(rgb(colors().accent)).child(
+                                    format!(
+                                        "{} · PID {} · {} · state {} · {} threads",
+                                        p.name, p.pid, p.user, p.state, p.threads
+                                    ),
+                                ))
                                 .child(
                                     button("copy-command", "Copy command")
                                         .flex()
@@ -1594,7 +1625,7 @@ impl Render for Monitor {
             })
             .when(self.menu, |d| d.child(self.layout_menu(cx)))
             .when(self.entry == Entry::Preset, |d| {
-                d.child(div().px_4().py_2().bg(rgb(RAISED)).child(format!(
+                d.child(div().px_4().py_2().bg(rgb(colors().raised)).child(format!(
                     "Preset name: {}▏   Enter to save · Esc to cancel",
                     self.preset_name
                 )))
@@ -1606,7 +1637,7 @@ impl Render for Monitor {
                         .items_center()
                         .px_3()
                         .text_size(px(10.))
-                        .text_color(rgb(MUTED))
+                        .text_color(rgb(colors().muted))
                         .child(self.notice.clone())
                         .child(icon_button("dismiss", Icon::Close).on_click(cx.listener(
                             |this, _, _, cx| {
@@ -1622,12 +1653,12 @@ impl Render for Monitor {
                     .h(px(28.))
                     .flex_shrink_0()
                     .border_t_1()
-                    .border_color(rgb(LINE))
+                    .border_color(rgb(colors().line))
                     .flex()
                     .items_center()
                     .text_size(px(10.))
-                    .text_color(rgb(MUTED))
-                    .bg(rgb(PANEL))
+                    .text_color(rgb(colors().muted))
+                    .bg(rgb(colors().panel))
                     .child(muted(if self.paused {
                         "Measurements paused".into()
                     } else {

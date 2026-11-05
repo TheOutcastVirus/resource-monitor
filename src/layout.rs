@@ -256,11 +256,19 @@ impl Layout {
         }
     }
 }
+#[derive(Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    #[default]
+    Dark,
+    Light,
+}
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub layout: Layout,
     pub presets: BTreeMap<String, Layout>,
+    pub theme: Theme,
 }
 impl Settings {
     pub fn path() -> PathBuf {

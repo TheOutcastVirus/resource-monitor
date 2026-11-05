@@ -7,8 +7,9 @@ A native Linux resource monitor built in Rust with [GPUI](https://gpui.rs/). CPU
 - GPU and VRAM history with compact side-by-side meters and NVTOP-ordered device, clock, temperature, fan, power, PCIe, traffic, and encoder/decoder details above the graph.
 - Network RX/TX history with a synchronized vertical scale, aggregate totals, and segmented per-interface rates. TCP/UDP socket counts appear in system process rows.
 - Cached, virtualized system and GPU process tables. Click column headings to sort; click a row for its full command, user, state, thread count, CPU and memory details. Click a PID to copy it; the detail view also copies the complete command. Graphics/compute entries are merged by PID.
+- Processes of one application — Brave, Discord, Steam and the like — collapse into a single row with the app's name, icon, process count, and summed CPU, RAM, GPU, VRAM, and socket counts. Click the row to expand or collapse it.
 - Always-on panel dragging, height resizing, mixed-width rows, one to three columns, panel hiding, portrait/landscape layouts, and named presets.
-- An Ubuntu-native light interface with compact controls, ruled system graphs, dense process tables, and responsive bordered panels.
+- An Adwaita dark interface by default, matching GNOME System Monitor, with a light theme one click away; compact controls, ruled system graphs, dense process tables, and responsive bordered panels.
 - Timestamped, bounded graph smoothing, independent polling and animation rates, and pause/resume that preserves history and excludes paused wall time.
 
 ## Build and run
@@ -54,7 +55,7 @@ The archive is built for the host's architecture and libc; it is not a universal
 
 Drag any panel header onto another panel to move it before that panel, anywhere in the workspace. Panel heights automatically fit the window while preserving readable minimums. Drag a panel's bottom grip to adjust its share of the available space. Choose one, two, or three columns in **Layout**. The **Full width / 1 col / 2 cols** control on each panel cycles its column span, allowing full-width graphs above side-by-side panels. A row shares its height across panels. Use the small `×` on a panel to hide it and **Layout** to show it again. While dragging, the drop target at the bottom of each column accepts panels too.
 
-**Layout** contains portrait/landscape presets, saved workspaces, polling rates, animation rates, and font-size controls. Choose **Save preset**, type a name, and press Enter. Saving the same name replaces that preset. The `×` beside a saved preset deletes it. Every layout edit also saves the current workspace automatically to `$XDG_CONFIG_HOME/strata/settings.json` (normally `~/.config/strata/settings.json`). Invalid settings produce a visible message and fall back to defaults.
+**Layout** contains portrait/landscape presets, saved workspaces, the Dark/Light theme switch, polling rates, animation rates, and font-size controls. Choose **Save preset**, type a name, and press Enter. Saving the same name replaces that preset. The `×` beside a saved preset deletes it. Every layout edit also saves the current workspace automatically to `$XDG_CONFIG_HOME/strata/settings.json` (normally `~/.config/strata/settings.json`). Invalid settings produce a visible message and fall back to defaults.
 
 The default is a single column with CPU, memory, and system processes above the GPU and GPU-process panels. The grid reduces its effective column count when there is less than 480 logical pixels per column. Portrait presets explicitly use one column at any width. Panels remain on the same page; long workspaces and process lists scroll independently.
 
@@ -73,6 +74,8 @@ The graphs display a one-poll delay so the newest segment can interpolate betwee
 GPU memory is allocated VRAM, not memory-controller activity. GPU process utilization is driver-sampled SM activity; NVML may omit a process's utilization even when it reports that process's VRAM. Such readings show `—`. Per-process VRAM is counted once when the same PID appears in both graphics and compute lists. PCIe rates are converted from NVML's KiB/s to MiB/s. Temperature is the maximum readable CPU hwmon sensor from supported CPU drivers, not an average across cores.
 
 Network totals sum non-loopback interfaces. Virtual bridges and physical interfaces can observe the same traffic; per-interface readings make this distinction visible. TCP/UDP columns count unique owned socket inodes in the monitor's network namespace, refreshed every three seconds. Unreadable process descriptors show `—`. These are socket counts, not per-process byte rates; reliable per-process bandwidth attribution needs a future tracing backend.
+
+Application groups come from the systemd scope GNOME, Flatpak, and Snap create for each launched app (`app-gnome-discord-….scope`). Outside such a scope, a process joins a same-named parent, then a matching desktop entry, then a parent already known to be an app, as long as both share a cgroup; terminal-launched commands therefore stay separate from the terminal. Names and icons come from `.desktop` files in the XDG data directories and the `hicolor` icon theme, re-read when an `applications` directory changes. Group RAM sums each process's resident set, so memory shared between an app's processes (common in Chromium and Electron apps) is counted more than once.
 
 ## Implementation
 

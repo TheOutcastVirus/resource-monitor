@@ -1,3 +1,4 @@
+mod apps;
 mod chart;
 mod layout;
 mod metrics;

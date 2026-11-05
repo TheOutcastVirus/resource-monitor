@@ -1,16 +1,11 @@
 use crate::metrics::Snapshot;
-use crate::theme::CHART_GRID;
+use crate::theme::colors;
 use gpui::{prelude::*, *};
 use std::{
     collections::VecDeque,
     sync::Arc,
     time::{Duration, Instant},
 };
-pub const COLORS: [u32; 24] = [
-    0xe01b24, 0xff7800, 0xf6d32d, 0x33d17a, 0x26a269, 0x3584e4, 0x1c71d8, 0x9141ac, 0xc061cb,
-    0xe66100, 0x2ec27e, 0x62a0ea, 0xa51d2d, 0xc64600, 0xe5a50a, 0x2d7f5e, 0x1a5fb4, 0x613583,
-    0x813d9c, 0xff9b5e, 0x57e389, 0x99c1f1, 0xed333b, 0xf8e45c,
-];
 
 const CURVE_STEPS: usize = 4;
 const HISTORY_WINDOW_MS: u64 = 62_000;
@@ -187,6 +182,7 @@ pub fn graph(
                 return;
             }
             let origin = bounds.origin;
+            let c = colors();
             let max_intervals = (HISTORY_WINDOW_MS / poll_ms.max(MIN_POLL_MS)) as usize;
             let pt = |x: f32, y: f32| point(origin.x + px(x), origin.y + px(y));
             for i in 0..=5 {
@@ -195,7 +191,7 @@ pub fn graph(
                 p.move_to(pt(0., y));
                 p.line_to(pt(w, y));
                 if let Ok(p) = p.build() {
-                    window.paint_path(p, rgb(CHART_GRID));
+                    window.paint_path(p, rgb(c.chart_grid));
                 }
             }
             for i in 0..=6 {
@@ -204,7 +200,7 @@ pub fn graph(
                 p.move_to(pt(x, 0.));
                 p.line_to(pt(x, h));
                 if let Ok(p) = p.build() {
-                    window.paint_path(p, rgba(0xd8daddb0));
+                    window.paint_path(p, rgba(c.chart_grid_minor));
                 }
             }
             // A one-poll visual delay permits interpolation using only real samples.
@@ -235,12 +231,23 @@ pub fn graph(
                         })
                         .collect();
                     if let Some(path) = smooth_stroke(&points, origin, 1.8) {
-                        window.paint_path(path, rgb(if series == 0 { 0x3584e4 } else { 0xff7800 }));
+                        window.paint_path(
+                            path,
+                            rgb(if series == 0 {
+                                c.receive_graph
+                            } else {
+                                c.transmit_graph
+                            }),
+                        );
                     }
                 }
             } else if let Some(uuid) = &gpu_uuid {
                 for series in 0..2 {
-                    let color = rgb(if series == 0 { 0x2ec27e } else { 0x9141ac });
+                    let color = rgb(if series == 0 {
+                        c.gpu_graph
+                    } else {
+                        c.vram_graph
+                    });
                     // Missing samples split the line; never bridge a gap with a curve.
                     let mut points = vec![];
                     for (x, s) in &visible {
@@ -317,7 +324,7 @@ pub fn graph(
                         }
                     }
                     if max_y - min_y > f32::EPSILON {
-                        window.paint_path(path, rgb(COLORS[core % COLORS.len()]));
+                        window.paint_path(path, rgb(c.cores[core % c.cores.len()]));
                         painted_triangles += triangles_per_layer;
                     }
                     base = top;
