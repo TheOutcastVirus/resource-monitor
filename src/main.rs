@@ -1,3 +1,4 @@
+mod amd;
 mod apps;
 mod chart;
 mod layout;

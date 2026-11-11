@@ -242,6 +242,7 @@ pub struct Sampler {
     thermal: Vec<String>,
     nvml: Option<Nvml>,
     nvml_error: Option<String>,
+    amd: crate::amd::AmdSampler,
     last_gpu_stamp: HashMap<String, u64>,
 }
 impl Sampler {
@@ -294,6 +295,7 @@ impl Sampler {
             thermal,
             nvml,
             nvml_error,
+            amd: crate::amd::AmdSampler::new(),
             last_gpu_stamp: HashMap::new(),
         }
     }
@@ -488,6 +490,14 @@ impl Sampler {
                     }
                 }
             }
+        }
+        gpus.extend(self.amd.sample(&processes));
+        if !gpus.is_empty() {
+            gpu_error = None;
+        } else if let Some(error) = gpu_error {
+            gpu_error = Some(format!(
+                "No supported GPU detected (NVIDIA NVML or AMD amdgpu). {error}"
+            ));
         }
         Snapshot {
             at: Instant::now(),

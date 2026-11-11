@@ -7,6 +7,6 @@ Exec=strata
 Icon=io.strata.Monitor
 Terminal=false
 Categories=System;Monitor;
-Keywords=CPU;GPU;RAM;NVIDIA;Processes;Monitor;
+Keywords=CPU;GPU;RAM;NVIDIA;AMD;Radeon;Processes;Monitor;
 StartupNotify=true
 StartupWMClass=io.strata.Monitor

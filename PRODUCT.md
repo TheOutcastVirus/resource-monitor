@@ -12,7 +12,7 @@ Inferred from the application and the supplied redesign brief: Linux workstation
 
 ## Product Purpose
 
-Strata brings system and NVIDIA GPU telemetry into one responsive desktop monitor. Success means the user can recognize load, find an expensive process, and inspect the relevant detail quickly while the monitor itself remains lightweight.
+Strata brings system and NVIDIA/AMD GPU telemetry into one responsive desktop monitor. Success means the user can recognize load, find an expensive process, and inspect the relevant detail quickly while the monitor itself remains lightweight.
 
 ## Positioning
 
@@ -24,11 +24,11 @@ Inferred from the repository and supplied screenshots: Strata runs as a native L
 
 ## Capabilities and Constraints
 
-- Preserve CPU, memory and swap, system process, NVIDIA GPU and VRAM, GPU detail, GPU process, and network monitoring.
+- Preserve CPU, memory and swap, system process, NVIDIA/AMD GPU and VRAM, GPU detail, GPU process, and network monitoring.
 - Preserve sorting, filtering, process detail and copy actions, pause and resume, polling and chart frame-rate controls, movable and resizable panels, responsive one-to-three-column layouts, hidden panels, and saved presets.
 - Keep sampling off the UI thread, histories bounded, charts GPU-rendered, and long process lists virtualized.
 - Missing measurements remain explicit rather than being shown as zero.
-- AMD GPU telemetry remains an open product decision.
+- AMD telemetry uses the kernel's amdgpu sysfs/hwmon and DRM fdinfo interfaces; available readings depend on hardware, driver support, and read permissions.
 
 ## Brand Commitments
 

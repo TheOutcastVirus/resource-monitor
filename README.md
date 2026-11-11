@@ -1,6 +1,6 @@
 # Strata
 
-A native Linux resource monitor built in Rust with [GPUI](https://gpui.rs/). CPU, memory, system processes, and NVIDIA GPU telemetry live together in a borderless, resizable workspace.
+A native Linux resource monitor built in Rust with [GPUI](https://gpui.rs/). CPU, memory, system processes, and NVIDIA/AMD GPU telemetry live together in a borderless, resizable workspace.
 
 - Stacked 60-second CPU history, 24 distinct colors, an adaptive column-major per-core legend, CPU model, and gradient-colored temperature.
 - RAM segments for used memory, cache, buffers, and free memory; an aligned swap bar in the same compact summary.
@@ -14,7 +14,7 @@ A native Linux resource monitor built in Rust with [GPUI](https://gpui.rs/). CPU
 
 ## Build and run
 
-Requires Linux, a current stable Rust toolchain, and Vulkan-capable graphics drivers. NVIDIA monitoring uses the NVML library supplied with the proprietary NVIDIA driver; the monitor still opens without NVML. AMD telemetry is not implemented yet.
+Requires Linux, a current stable Rust toolchain, and Vulkan-capable graphics drivers. NVIDIA monitoring uses the NVML library supplied with the proprietary NVIDIA driver. AMD monitoring uses the kernel's `amdgpu` sysfs/hwmon and DRM fdinfo interfaces without extra libraries or elevated privileges. The monitor still opens when neither telemetry backend is available.
 
 On Ubuntu 24.04:
 
@@ -71,7 +71,9 @@ RAM segments are disjoint: cache is `Cached + SReclaimable − Shmem`, buffers a
 
 The graphs display a one-poll delay so the newest segment can interpolate between real samples. Numeric readings show the latest measurement. Pausing freezes displayed data while the sampler stays warm; resume keeps existing graph samples and removes paused time from the graph clock. Changing polling rate may temporarily shift the delayed endpoint.
 
-GPU memory is allocated VRAM, not memory-controller activity. GPU process utilization is driver-sampled SM activity; NVML may omit a process's utilization even when it reports that process's VRAM. Such readings show `—`. Per-process VRAM is counted once when the same PID appears in both graphics and compute lists. PCIe rates are converted from NVML's KiB/s to MiB/s. Temperature is the maximum readable CPU hwmon sensor from supported CPU drivers, not an average across cores.
+GPU memory is allocated VRAM, not memory-controller activity. On integrated AMD GPUs this is the firmware-reserved VRAM pool within shared system RAM; additional GTT allocations are excluded. NVIDIA process utilization is driver-sampled SM activity; NVML may omit a process's utilization even when it reports that process's VRAM. Such readings show `—`. Per-process VRAM is counted once when the same PID appears in both graphics and compute lists. PCIe rates are converted from NVML's KiB/s to MiB/s. Temperature is the maximum readable CPU hwmon sensor from supported CPU drivers, not an average across cores.
+
+AMD process utilization sums graphics/compute engine-time deltas between polls, capped at 100%; a client's first sample shows `—`. Duplicate DRM descriptors are counted once per device/client, including clients shared across PIDs (attributed to the lowest readable PID). Only accessible processes are listed; shared buffers across different clients may still appear in multiple rows. AMD power is the hwmon SoC reading, which includes CPU power on APUs. Unsupported sensors, PCIe traffic, and encoder/decoder readings show `—`; an unmarked memory-clock table is treated as unavailable. Sensor and process availability depends on the GPU, kernel, and read permissions. See the kernel's [AMDGPU sensor documentation](https://docs.kernel.org/gpu/amdgpu/thermal.html) and [DRM client statistics](https://docs.kernel.org/gpu/drm-usage-stats.html).
 
 Network totals sum non-loopback interfaces. Virtual bridges and physical interfaces can observe the same traffic; per-interface readings make this distinction visible. TCP/UDP columns count unique owned socket inodes in the monitor's network namespace, refreshed every three seconds. Unreadable process descriptors show `—`. These are socket counts, not per-process byte rates; reliable per-process bandwidth attribution needs a future tracing backend.
 
@@ -79,10 +81,10 @@ Application groups come from the systemd scope GNOME, Flatpak, and Snap create f
 
 ## Implementation
 
-`src/metrics.rs` owns the sampler thread and Linux/NVML adapters. It publishes the latest snapshot through a single-slot mailbox; the UI never waits for sampling and no subprocess is launched for a poll. `/proc` CPU deltas exclude guest double-counting and account for PID reuse. NVIDIA is loaded dynamically through `nvml-wrapper`.
+`src/metrics.rs` owns the sampler thread and Linux/NVML adapters. It publishes the latest snapshot through a single-slot mailbox; the UI never waits for sampling and no subprocess is launched for a poll. `/proc` CPU deltas exclude guest double-counting and account for PID reuse. NVIDIA is loaded dynamically through `nvml-wrapper`. `src/amd.rs` discovers AMD DRM cards (including systems starting at `card1`) and supplies the same normalized GPU/process readings from sysfs and fdinfo. Marketing names come from the installed `amdgpu.ids` database when available, with PCI device IDs as a fallback.
 
 `src/chart.rs` keeps only compact graph samples in a bounded history. Charts share one animation clock at 30 fps by default (15/30/60 selectable), maintaining the selected rate when unfocused. Offscreen chart painting is skipped. Network and GPU lines use bounded, anti-aliased Bézier curves; CPU layers use bounded Catmull–Rom subdivisions while still emitting triangles directly, avoiding per-frame polygon tessellation and visual overshoot. Process rows are virtualized with GPUI's `uniform_list`, inside cached views that avoid rebuilding unrelated tables for chart animation. Release builds use thin LTO and stripped symbols.
 
-`src/layout.rs` owns validated, serializable workspace state and atomic file replacement. `src/ui.rs` renders the panels and interactions. `src/theme.rs` owns shared colors and the vector icon family; `DESIGN.md` records the visual conventions. To add AMD support, supply the same normalized `Gpu`/`Process` readings through a separate driver adapter; the charts and panels are vendor-independent. NVIDIA is the only implemented GPU sampler in this version.
+`src/layout.rs` owns validated, serializable workspace state and atomic file replacement. `src/ui.rs` renders the panels and interactions. `src/theme.rs` owns shared colors and the vector icon family; `DESIGN.md` records the visual conventions. The charts and panels consume vendor-independent `Gpu`/`Process` readings from both NVIDIA and AMD samplers.
 
 GPUI is GPU-accelerated and does allocate its own host and GPU memory. Lightweight does not mean terminal-sized overhead; use the optimized release build when evaluating CPU usage and responsiveness.

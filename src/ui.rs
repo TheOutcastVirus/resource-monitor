@@ -844,7 +844,7 @@ impl Monitor {
             self.sample
                 .gpu_error
                 .clone()
-                .unwrap_or("Waiting for a supported NVIDIA GPU…".into()),
+                .unwrap_or("Waiting for a supported NVIDIA or AMD GPU…".into()),
         )
     }
     fn gpu_details(&self, cx: &mut Context<Self>) -> Div {
