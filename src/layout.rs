@@ -69,6 +69,7 @@ pub struct Tile {
 #[serde(default)]
 pub struct Layout {
     pub tiles: Vec<Tile>,
+    pub auto_fit: bool,
     pub columns: usize,
     pub split: f32,
     pub font_size: f32,
@@ -97,6 +98,7 @@ impl Layout {
                     visible: true,
                 })
                 .collect(),
+            auto_fit: true,
             columns: 2,
             split: 0.5,
             font_size: 12.,
@@ -152,6 +154,14 @@ impl Layout {
         rows
     }
     pub fn fitted_heights(&self, columns: usize, available: f32) -> Vec<(Panel, f32)> {
+        if !self.auto_fit {
+            return self
+                .tiles
+                .iter()
+                .filter(|t| t.visible)
+                .map(|t| (t.panel, t.height))
+                .collect();
+        }
         let rows = self.rows(columns);
         let mut pending: Vec<usize> = (0..rows.len()).collect();
         let mut out = vec![0.; rows.len()];
@@ -199,6 +209,24 @@ impl Layout {
                 row.into_iter().map(move |t| (t.panel, h))
             })
             .collect()
+    }
+    pub fn resize_panel(&mut self, panel: Panel, height: f32, fitted: &[(Panel, f32)]) {
+        let Some(index) = self.tiles.iter().position(|t| t.panel == panel) else {
+            return;
+        };
+        if !height.is_finite() {
+            return;
+        }
+        // Capture the displayed sizes once so dragging one panel cannot refit its neighbors.
+        if self.auto_fit {
+            for tile in &mut self.tiles {
+                if let Some((_, height)) = fitted.iter().find(|(p, _)| *p == tile.panel) {
+                    tile.height = height.clamp(tile.panel.min_height(), 4000.);
+                }
+            }
+            self.auto_fit = false;
+        }
+        self.tiles[index].height = height.clamp(panel.min_height(), 4000.);
     }
     pub fn normalize(&mut self) {
         self.columns = self.columns.clamp(1, 3);
@@ -341,6 +369,111 @@ mod tests {
             assert!(h >= p.min_height());
         }
         assert!(l.fitted_heights(1, 2400.)[0].1 > sizes[0].1);
+    }
+    #[test]
+    fn manual_resize_preserves_other_panels_in_every_column_layout() {
+        for columns in 1..=3 {
+            let mut layout = Layout::portrait();
+            layout.columns = columns;
+            let before = layout.fitted_heights(columns, 2400.);
+            let memory_height = before.iter().find(|(p, _)| *p == Panel::Memory).unwrap().1;
+
+            layout.resize_panel(Panel::Memory, memory_height + 80., &before);
+
+            assert!(!layout.auto_fit);
+            for (panel, height) in &before {
+                let expected = if *panel == Panel::Memory {
+                    height + 80.
+                } else {
+                    *height
+                };
+                // Neither viewport size nor responsive column changes may undo a drag.
+                for actual in [
+                    layout.fitted_heights(columns, 500.),
+                    layout.fitted_heights(1, 3000.),
+                ] {
+                    assert_eq!(actual.iter().find(|(p, _)| p == panel).unwrap().1, expected);
+                }
+            }
+
+            let current = layout.fitted_heights(columns, 2400.);
+            layout.resize_panel(Panel::Memory, memory_height + 160., &current);
+            assert_eq!(
+                layout
+                    .tiles
+                    .iter()
+                    .find(|t| t.panel == Panel::Memory)
+                    .unwrap()
+                    .height,
+                memory_height + 160.
+            );
+        }
+    }
+    #[test]
+    fn manual_resize_respects_readable_minimums_and_maximums() {
+        let mut layout = Layout::portrait();
+        let fitted = layout.fitted_heights(1, 1800.);
+        for panel in Panel::ALL {
+            layout.resize_panel(panel, 0., &fitted);
+            assert_eq!(
+                layout
+                    .tiles
+                    .iter()
+                    .find(|t| t.panel == panel)
+                    .unwrap()
+                    .height,
+                panel.min_height()
+            );
+            layout.resize_panel(panel, 5000., &fitted);
+            assert_eq!(
+                layout
+                    .tiles
+                    .iter()
+                    .find(|t| t.panel == panel)
+                    .unwrap()
+                    .height,
+                4000.
+            );
+        }
+    }
+    #[test]
+    fn manual_heights_survive_settings_and_presets_round_trip() {
+        let mut settings = Settings::default();
+        let fitted = settings.layout.fitted_heights(2, 1800.);
+        settings.layout.resize_panel(Panel::Memory, 250., &fitted);
+        settings
+            .presets
+            .insert("Custom".into(), settings.layout.clone());
+        let mut decoded: Settings =
+            serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
+        decoded.layout.normalize();
+        assert!(!decoded.presets["Custom"].auto_fit);
+        assert_eq!(
+            decoded.layout.fitted_heights(2, 1000.),
+            settings.layout.fitted_heights(2, 1800.)
+        );
+
+        // Older settings have no sizing mode and must retain automatic fitting.
+        let mut legacy = serde_json::to_value(Layout::portrait()).unwrap();
+        legacy.as_object_mut().unwrap().remove("auto_fit");
+        assert!(serde_json::from_value::<Layout>(legacy).unwrap().auto_fit);
+    }
+    #[test]
+    fn automatic_fit_can_be_restored_after_manual_resize() {
+        let mut layout = Layout::portrait();
+        let fitted = layout.fitted_heights(1, 1800.);
+        layout.resize_panel(Panel::Memory, 500., &fitted);
+        layout.auto_fit = true;
+        let restored = layout.fitted_heights(1, 1800.);
+        assert_eq!(
+            restored
+                .iter()
+                .find(|(p, _)| *p == Panel::Memory)
+                .unwrap()
+                .1,
+            120.
+        );
+        assert!((restored.iter().map(|(_, h)| h).sum::<f32>() + 50. - 1800.).abs() < 0.1);
     }
     #[test]
     fn reorder_moves_across_lanes_without_losing_panels() {

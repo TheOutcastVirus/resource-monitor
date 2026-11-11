@@ -378,6 +378,13 @@ impl Monitor {
                             cx.notify();
                         },
                     )))
+                    .child(button("fit-heights", "Fit heights").on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.settings.layout.auto_fit = true;
+                            this.save();
+                            cx.notify();
+                        },
+                    )))
                     .child(button("new-preset", "Save preset…").on_click(cx.listener(
                         |this, _, window, cx| {
                             this.entry = Entry::Preset;
@@ -1224,7 +1231,15 @@ impl Monitor {
                         )
                     }),
             )
-            .child(body)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(body),
+            )
             .when(true, |d| {
                 d.child(
                     div()
@@ -1240,21 +1255,10 @@ impl Monitor {
                         .child(div().w(px(22.)).h(px(1.)).bg(rgb(colors().line)))
                         .on_mouse_down(
                             MouseButton::Left,
-                            cx.listener(move |this, e: &MouseDownEvent, window, cx| {
-                                for (panel, h) in &this.fitted {
-                                    if let Some(t) = this
-                                        .settings
-                                        .layout
-                                        .tiles
-                                        .iter_mut()
-                                        .find(|t| t.panel == *panel)
-                                    {
-                                        t.height = *h;
-                                    }
-                                }
-                                let _ = window;
+                            cx.listener(move |this, e: &MouseDownEvent, _, cx| {
                                 this.resize =
                                     Some(Resize::Height(p, f32::from(e.position.y), height));
+                                cx.notify();
                                 cx.stop_propagation();
                             }),
                         ),
@@ -1280,12 +1284,10 @@ impl Monitor {
                     .map(|(i, row)| {
                         let empty =
                             columns - row.iter().map(|t| t.span.min(columns)).sum::<usize>();
-                        let height = self
-                            .fitted
+                        let height = row
                             .iter()
-                            .find(|(p, _)| *p == row[0].panel)
-                            .map(|(_, h)| *h)
-                            .unwrap_or(200.);
+                            .map(|tile| self.panel_height(tile.panel))
+                            .fold(0., f32::max);
                         div()
                             .id(("grid-row", i))
                             .flex()
@@ -1304,7 +1306,11 @@ impl Monitor {
                                         d.style().flex_grow = Some(weight);
                                         d
                                     })
-                                    .child(self.panel(tile.panel, height, cx))
+                                    .child(self.panel(
+                                        tile.panel,
+                                        self.panel_height(tile.panel),
+                                        cx,
+                                    ))
                             }))
                             .when(empty > 0, |d| {
                                 d.child(div().flex_basis(px(10. * (empty as f32 - 1.))).map(
@@ -1343,6 +1349,13 @@ impl Monitor {
                         })),
                 )
             })
+    }
+    fn panel_height(&self, panel: Panel) -> f32 {
+        self.fitted
+            .iter()
+            .find(|(p, _)| *p == panel)
+            .map(|(_, height)| *height)
+            .unwrap_or_else(|| panel.height())
     }
 }
 impl Render for Monitor {
@@ -1413,35 +1426,22 @@ impl Render for Monitor {
             .font_family("Noto Sans")
             .text_size(px(self.settings.layout.font_size))
             .on_key_down(cx.listener(Self::key))
+            .when(self.resize.is_some(), |d| d.cursor_row_resize())
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _window, cx| {
                 if let Some(resize) = this.resize {
                     if e.pressed_button != Some(MouseButton::Left) {
                         this.resize = None;
                         this.save();
+                        cx.notify();
                         return;
                     }
                     match resize {
                         Resize::Height(p, y, h) => {
-                            let panels: Vec<_> = this
-                                .settings
-                                .layout
-                                .rows(this.effective_columns)
-                                .into_iter()
-                                .find(|r| r.iter().any(|t| t.panel == p))
-                                .map(|r| r.into_iter().map(|t| t.panel).collect())
-                                .unwrap_or_default();
-                            for panel in panels {
-                                if let Some(t) = this
-                                    .settings
-                                    .layout
-                                    .tiles
-                                    .iter_mut()
-                                    .find(|t| t.panel == panel)
-                                {
-                                    t.height = (h + f32::from(e.position.y) - y)
-                                        .clamp(panel.min_height(), 4000.);
-                                }
-                            }
+                            this.settings.layout.resize_panel(
+                                p,
+                                h + f32::from(e.position.y) - y,
+                                &this.fitted,
+                            );
                         }
                     }
                     cx.notify();
