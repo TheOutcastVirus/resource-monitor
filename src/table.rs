@@ -348,6 +348,8 @@ impl Render for ProcessTable {
             .flex_col()
             .min_h_0()
             .overflow_hidden()
+            // The list scrolls first (it is deeper); keep the wheel from reaching the workspace.
+            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
             .child(
                 div()
                     .flex()
