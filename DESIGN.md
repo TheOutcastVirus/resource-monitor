@@ -7,7 +7,8 @@ colors:
   panel: "#ffffff"
   raised-control: "#f1f1f1"
   separator: "#d9d9d9"
-  chart-grid: "#d8dadd"
+  chart-background: "#e9eaec"
+  chart-grid: "#c8cbd0"
   text: "#3d3846"
   text-muted: "#6f6b72"
   selection: "#e7e5ff"
@@ -154,6 +155,7 @@ CPU and GPU temperature values interpolate continuously through action blue at 3
 - **Instrument White** (`panel`): Panel bodies, title bar, status bar, and table rows.
 - **Control Gray** (`raised-control`): Compact controls, table headings, and expanded layout settings.
 - **Separator Gray** (`separator`): Panel outlines, header rules, and control borders.
+- **Plot Surface** (`chart-background`): A darker fill confined to the plot area, with a charcoal counterpart (`#181818`) in dark mode.
 - **Graph Paper Gray** (`chart-grid`): Ruled graph lines.
 - **Ink** (`text`): Primary labels and values.
 - **Secondary Ink** (`text-muted`): Supporting labels, units, summaries, and unavailable-state copy.
