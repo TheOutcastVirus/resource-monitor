@@ -183,6 +183,7 @@ pub fn graph(
             }
             let origin = bounds.origin;
             let c = colors();
+            window.paint_quad(fill(bounds, rgb(c.chart_bg)));
             let max_intervals = (HISTORY_WINDOW_MS / poll_ms.max(MIN_POLL_MS)) as usize;
             let pt = |x: f32, y: f32| point(origin.x + px(x), origin.y + px(y));
             for i in 0..=5 {
